@@ -1,0 +1,6 @@
+# Godot 本地缓存与导入产物,每台机器自动重建,不进版本库
+.godot/
+*.import
+
+# macOS
+.DS_Store
