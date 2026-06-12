@@ -7,3 +7,6 @@ signal player_hp_changed(hp: int, max_hp: int)
 signal player_died
 signal weapon_equipped(stats: Dictionary)
 signal exit_reached
+## 噪音事件:潜行系统的统一货币(设计议题 1.3)。枪声、未来的偷窃失手、
+## 通风管动静都从这里广播;守卫各自判断声源是否在自己可听范围内
+signal noise_emitted(pos: Vector2, radius: float, source_group: String)

@@ -4,22 +4,24 @@ extends Node2D
 ## 玩家和守卫共用这个类,只是参数表和子弹掩码不同。
 
 const Bullet := preload("res://scripts/combat/bullet.gd")
+const NoiseRing := preload("res://scripts/combat/noise_ring.gd")
 
+# noise = 枪声噪音半径(设计议题 1.3):圈内守卫会赶来查看。守卫步枪不触发(0)
 const PISTOL := {
 	"name": "手枪", "fire_rate": 4.0, "bullets": 1, "spread": 0.06,
-	"bullet_speed": 280.0, "damage": 1, "shake": 1.5, "color": Color("ffe07a"),
+	"bullet_speed": 280.0, "damage": 1, "shake": 1.5, "noise": 130.0, "color": Color("ffe07a"),
 }
 const SMG := {
 	"name": "冲锋枪", "fire_rate": 9.0, "bullets": 1, "spread": 0.16,
-	"bullet_speed": 300.0, "damage": 1, "shake": 1.2, "color": Color("8aff9e"),
+	"bullet_speed": 300.0, "damage": 1, "shake": 1.2, "noise": 110.0, "color": Color("8aff9e"),
 }
 const SHOTGUN := {
 	"name": "霰弹枪", "fire_rate": 1.6, "bullets": 5, "spread": 0.38,
-	"bullet_speed": 250.0, "damage": 1, "shake": 4.0, "color": Color("ff9e6b"),
+	"bullet_speed": 250.0, "damage": 1, "shake": 4.0, "noise": 180.0, "color": Color("ff9e6b"),
 }
 const GUARD_RIFLE := {
 	"name": "守卫步枪", "fire_rate": 1.3, "bullets": 1, "spread": 0.1,
-	"bullet_speed": 190.0, "damage": 1, "shake": 0.0, "color": Color("ff5a5a"),
+	"bullet_speed": 190.0, "damage": 1, "shake": 0.0, "noise": 0.0, "color": Color("ff5a5a"),
 }
 
 var stats := PISTOL
@@ -74,6 +76,15 @@ func try_fire() -> void:
 		Game.play_sfx_at("shoot", global_position, 0.8)  # 守卫枪声:带方位 + 低八度
 	else:
 		Game.play_sfx("shoot")
+	# 枪声广播噪音事件,并给玩家画出"这一枪谁能听见"的可视化圈
+	var noise := float(stats.get("noise", 0.0))
+	if noise > 0.0:
+		EventBus.noise_emitted.emit(global_position, noise, shooter_group)
+		if shooter_group != "guards":
+			var ring := NoiseRing.new()
+			ring.max_radius = noise
+			get_tree().current_scene.add_child(ring)
+			ring.global_position = global_position
 	_muzzle_flash()
 	_eject_shell()
 

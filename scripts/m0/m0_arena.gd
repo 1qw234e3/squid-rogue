@@ -9,6 +9,7 @@ const GuardScript := preload("res://scripts/actors/guard.gd")
 const PickupScript := preload("res://scripts/combat/pickup.gd")
 const WeaponScript := preload("res://scripts/combat/weapon.gd")
 const ShakeCamera := preload("res://scripts/m0/shake_camera.gd")
+const ExitArrow := preload("res://scripts/m0/exit_arrow.gd")
 
 const CELL := 16
 const GRID_W := 44
@@ -17,6 +18,8 @@ const MAX_GUARDS := 6
 
 const COLOR_FLOOR := Color("39424f")
 const COLOR_WALL := Color("171c24")
+# 地标房间的地面染色(设计议题 1.4):紫/绿/红,给玩家可指认的"那个房间"
+const ROOM_TINTS: Array = [Color("46394f"), Color("394f41"), Color("4f3a39")]
 
 var rng := RandomNumberGenerator.new()
 var run_seed := 0
@@ -28,6 +31,7 @@ var guards_total := 0
 var guards_left := 0
 var elapsed := 0.0
 var finished := false
+var room_tints := {}  # 房间下标 -> 地标染色
 
 var hud_hp: Label
 var hud_weapon: Label
@@ -41,6 +45,7 @@ func _ready() -> void:
 	var maze: Dictionary = BspMaze.generate(GRID_W, GRID_H, rng)
 	grid = maze.grid
 	rooms = maze.rooms
+	_pick_landmark_rooms()
 	_setup_astar()
 	_build_walls()
 	_setup_hud()  # HUD 先建好,玩家 _ready 里发的初始信号才能被接到
@@ -73,6 +78,23 @@ func _draw() -> void:
 		for x in GRID_W:
 			if grid[y][x] == 0:
 				draw_rect(Rect2(x * CELL, y * CELL, CELL, CELL), COLOR_FLOOR)
+	# 地标房间整块盖一层染色(房间必为矩形地面,直接盖最省事)
+	for idx in room_tints:
+		var r: Rect2i = rooms[idx]
+		draw_rect(Rect2(r.position.x * CELL, r.position.y * CELL, r.size.x * CELL, r.size.y * CELL), room_tints[idx])
+
+
+func _pick_landmark_rooms() -> void:
+	# 从中段房间里挑最多 3 个染色(避开出生房和出口房,它们已有自己的身份)
+	var candidates: Array = []
+	for i in range(1, rooms.size() - 1):
+		candidates.append(i)
+	for c in ROOM_TINTS.size():
+		if candidates.is_empty():
+			break
+		var pick := rng.randi_range(0, candidates.size() - 1)
+		room_tints[candidates[pick]] = ROOM_TINTS[c]
+		candidates.remove_at(pick)
 
 
 func _setup_astar() -> void:
@@ -177,6 +199,10 @@ func _spawn_exit() -> void:
 	add_child(exit)
 	exit.global_position = _cell_center(room.get_center())
 	exit.body_entered.connect(func(_body: Node) -> void: EventBus.exit_reached.emit())
+	# 出口方向箭头挂在玩家身上(设计议题 1.4:没有它找出口全靠瞎逛)
+	var arrow := ExitArrow.new()
+	arrow.target_pos = exit.global_position
+	player.add_child(arrow)
 
 
 func _spawn_guards() -> void:
