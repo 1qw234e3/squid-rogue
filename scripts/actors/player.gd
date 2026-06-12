@@ -18,6 +18,8 @@ var combat_enabled := true:
 			weapon.visible = v
 ## 木头人关:0.3s 惯性滑行,预判松杆是手感核心(设计文档 §3.1)
 var use_inertia := false
+## 外部授予的无敌(如抢椅子关:坐上椅子=安全区)
+var invulnerable := false
 var rolling := false
 var roll_dir := Vector2.ZERO
 var roll_timer := 0.0
@@ -111,8 +113,8 @@ func heal(amount: int) -> void:
 
 
 func take_damage(dmg: int, from_dir: Vector2) -> void:
-	if rolling or hp <= 0:
-		return  # 翻滚期间免伤 = 无敌帧
+	if rolling or invulnerable or hp <= 0:
+		return  # 翻滚无敌帧 / 安全区免伤
 	hp -= dmg
 	knockback = from_dir * 140.0 * Tune.knockback_scale
 	EventBus.player_hp_changed.emit(hp, MAX_HP)

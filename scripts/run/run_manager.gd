@@ -8,6 +8,7 @@ const SCENE_LOBBY := "res://scenes/run/Lobby.tscn"
 const SCENE_SANDBOX := "res://scenes/run/Sandbox.tscn"
 const SCENE_BRIEFING := "res://scenes/run/Briefing.tscn"
 const SCENE_RESULTS := "res://scenes/run/Results.tscn"
+const SCENE_REPORT := "res://scenes/run/RoundReport.tscn"
 
 const GAMES := {
 	"redlight": {
@@ -18,9 +19,13 @@ const GAMES := {
 		"name": "守卫猎杀", "scene": "res://scenes/m0/M0Arena.tscn",
 		"rules": "你将被投入迷宫,守卫已获击杀许可。\n找到出口,或者杀出一条路。",
 	},
+	"chairs": {
+		"name": "抢椅子", "scene": "res://scenes/games/Chairs.tscn",
+		"rules": "音乐响起时保持移动,站定将被狙击。\n音乐停止后,坐上椅子的人活下来。\n没抢到的,清场弹幕会替你做决定。",
+	},
 }
 
-const SURVIVOR_CURVE := [48, 30, 18]  # 各轮开始时的存活数
+const SURVIVOR_CURVE := [48, 30, 18, 10]  # 各轮开始时的存活数
 const FINALE_PRIZE_PER_HEAD := 100    # 每淘汰一人入池 100(设计文档 §1.2)
 
 var active := false        # 是否在一局之中(false 时各场景可独立运行调试)
@@ -32,6 +37,8 @@ var intel_known := false   # 本轮是否买过"下一场是什么"的情报
 var champion := false
 var rounds_survived := 0
 var schedule: Array = []
+var last_eliminated := 0  # 上一场淘汰人数(结算插页用)
+var last_gain := 0        # 上一场奖金池涨幅
 
 
 func start_run() -> void:
@@ -43,7 +50,7 @@ func start_run() -> void:
 	intel_known = false
 	champion = false
 	rounds_survived = 0
-	schedule = ["redlight", "guardhunt"]
+	schedule = ["redlight", "guardhunt", "chairs"]
 	schedule.shuffle()                      # Roguelike:关卡顺序随机
 	schedule.append("finale_guardhunt")     # 决赛占位:守卫猎杀加强版,真决赛竞技场后续替换
 	_change(SCENE_SANDBOX)
@@ -91,11 +98,19 @@ func minigame_finished(player_alive: bool) -> void:
 		return
 	# 模拟其他参赛者的本轮死亡:存活数沿曲线递减,大池上涨
 	var next: int = SURVIVOR_CURVE[round_index + 1]
-	prize_pool += (survivors - next) * FINALE_PRIZE_PER_HEAD
+	last_eliminated = survivors - next
+	last_gain = last_eliminated * FINALE_PRIZE_PER_HEAD
+	prize_pool += last_gain
 	survivors = next
 	round_index += 1
 	intel_known = false
-	_change(SCENE_SANDBOX)
+	_change(SCENE_REPORT)  # 先看煽动性结算,再回沙盒
+
+
+## 结算插页读完 → 回沙盒
+func report_done() -> void:
+	if active:
+		_change(SCENE_SANDBOX)
 
 
 func back_to_lobby() -> void:

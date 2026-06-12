@@ -15,7 +15,7 @@ func _ready() -> void:
 		title = Game.make_label(layer, Vector2(0, 100), 24, "冠 军")
 		title.modulate = Color("ffd86b")
 		body = Game.make_label(layer, Vector2(0, 150), 11,
-			"47 名参赛者已离场。\n奖金 %d 已汇入你的账户。" % Run.prize_pool)
+			"47 名参赛者已离场。\n奖金 %d 已汇入你的账户。\n\n明年的邀请函已经寄出。我们都知道,你会拆开它。" % Run.prize_pool)
 	else:
 		title = Game.make_label(layer, Vector2(0, 100), 24, "你被淘汰了")
 		title.modulate = Color("ff6b6b")

@@ -25,8 +25,9 @@ const SHOTGUN := {
 	"sfx": "shoot_heavy", "color": Color("ff9e6b"),
 }
 const RIFLE := {
-	"name": "步枪", "fire_rate": 2.2, "bullets": 1, "spread": 0.02,
-	"bullet_speed": 420.0, "damage": 2, "shake": 2.5, "noise": 160.0,
+	# 定位:最强连射枪。DPS 11 > 冲锋枪 9,且高弹速高精度;代价是噪音全场第二响
+	"name": "步枪", "fire_rate": 5.5, "bullets": 1, "spread": 0.03,
+	"bullet_speed": 420.0, "damage": 2, "shake": 2.0, "noise": 160.0,
 	"sfx": "shoot_heavy", "color": Color("9ecbff"),
 }
 const GUARD_RIFLE := {
