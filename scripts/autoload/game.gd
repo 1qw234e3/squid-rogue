@@ -69,6 +69,17 @@ func ui_font() -> SystemFont:
 	return _ui_font
 
 
+## UI 快捷:建一个用中文字体的 Label(默认字体不含中文)
+func make_label(parent: Node, pos: Vector2, font_size: int, text := "") -> Label:
+	var l := Label.new()
+	l.position = pos
+	l.text = text
+	l.add_theme_font_override("font", ui_font())
+	l.add_theme_font_size_override("font_size", font_size)
+	parent.add_child(l)
+	return l
+
+
 func shake(amount: float) -> void:
 	if amount > 0.0 and is_instance_valid(camera):
 		camera.add_shake(amount * Tune.shake_scale)

@@ -10,6 +10,14 @@ const ROLL_CD := 1.5
 const MAX_HP := 6
 
 var hp := MAX_HP
+## 沙盒/木头人等场景关掉战斗:收枪、禁射击、禁拾取
+var combat_enabled := true:
+	set(v):
+		combat_enabled = v
+		if weapon:
+			weapon.visible = v
+## 木头人关:0.3s 惯性滑行,预判松杆是手感核心(设计文档 §3.1)
+var use_inertia := false
 var rolling := false
 var roll_dir := Vector2.ZERO
 var roll_timer := 0.0
@@ -35,6 +43,7 @@ func _ready() -> void:
 	add_child(body_rect)
 	weapon = Weapon.new()
 	weapon.setup(Weapon.PISTOL, "player", 1 | 4)  # 玩家子弹打墙和守卫
+	weapon.visible = combat_enabled
 	add_child(weapon)
 	EventBus.player_hp_changed.emit(hp, MAX_HP)
 	EventBus.weapon_equipped.emit(weapon.stats)
@@ -50,7 +59,11 @@ func _physics_process(delta: float) -> void:
 			rolling = false
 			body_rect.modulate.a = 1.0
 	else:
-		velocity = move * Tune.player_speed + knockback  # 移速走调参面板,F1 实时调
+		if use_inertia:
+			# 380 px/s²:从满速到停约 0.24s 滑行
+			velocity = velocity.move_toward(move * Tune.player_speed, 380.0 * delta) + knockback
+		else:
+			velocity = move * Tune.player_speed + knockback  # 移速走调参面板,F1 实时调
 		if Input.is_action_just_pressed("roll") and roll_cd <= 0.0 and move != Vector2.ZERO:
 			rolling = true
 			roll_dir = move.normalized()
@@ -62,9 +75,9 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_update_aim()
 	# 鼠标悬在调参面板上时停火,不然拖滑条会一直放枪
-	if not rolling and Input.is_action_pressed("shoot") and not Tune.mouse_over_panel():
+	if combat_enabled and not rolling and Input.is_action_pressed("shoot") and not Tune.mouse_over_panel():
 		weapon.try_fire()
-	if Input.is_action_just_pressed("interact"):
+	if combat_enabled and Input.is_action_just_pressed("interact"):
 		_try_pickup()
 
 

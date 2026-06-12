@@ -65,7 +65,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("restart"):
+	# R 重开仅限独立调试;一局之中不允许重打本轮
+	if event.is_action_pressed("restart") and not Run.active:
 		get_tree().reload_current_scene()
 
 
@@ -201,7 +202,9 @@ func _spawn_exit() -> void:
 
 
 func _spawn_guards() -> void:
-	var count := mini(rooms.size() - 1, MAX_GUARDS)
+	# 决赛占位:守卫猎杀加强版,守卫数量上调
+	var cap := 10 if Run.is_finale() else MAX_GUARDS
+	var count := mini(rooms.size() - 1, cap)
 	for i in count:
 		var room: Rect2i = rooms[1 + (i % (rooms.size() - 1))]
 		var g := GuardScript.new()
@@ -280,13 +283,20 @@ func _on_guard_died(_guard: Node) -> void:
 
 func _on_player_died() -> void:
 	finished = true
-	hud_msg.text = "你被淘汰了 —— 按 R 重开"
+	hud_msg.text = "你被淘汰了" if Run.active else "你被淘汰了 —— 按 R 重开"
 	hud_msg.visible = true
+	if Run.active:
+		await get_tree().create_timer(1.8).timeout
+		Run.minigame_finished(false)
 
 
 func _on_exit_reached() -> void:
 	if finished:
 		return
 	finished = true
-	hud_msg.text = "逃出迷宫!用时 %.1f 秒,击杀守卫 %d/%d —— 按 R 再来一局" % [elapsed, guards_total - guards_left, guards_total]
+	var stats_line := "逃出迷宫!用时 %.1f 秒,击杀守卫 %d/%d" % [elapsed, guards_total - guards_left, guards_total]
+	hud_msg.text = stats_line if Run.active else stats_line + " —— 按 R 再来一局"
 	hud_msg.visible = true
+	if Run.active:
+		await get_tree().create_timer(1.8).timeout
+		Run.minigame_finished(true)

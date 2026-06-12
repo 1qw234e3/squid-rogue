@@ -6,7 +6,7 @@ config_version=5
 [application]
 
 config/name="squid-rogue"
-run/main_scene="res://scenes/m0/M0Arena.tscn"
+run/main_scene="res://scenes/run/Lobby.tscn"
 config/features=PackedStringArray("4.6")
 
 [autoload]
@@ -14,6 +14,7 @@ config/features=PackedStringArray("4.6")
 EventBus="*res://scripts/autoload/event_bus.gd"
 Game="*res://scripts/autoload/game.gd"
 Tune="*res://scripts/autoload/tune.gd"
+Run="*res://scripts/run/run_manager.gd"
 
 [display]
 
