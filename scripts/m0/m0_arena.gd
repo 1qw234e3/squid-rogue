@@ -10,16 +10,20 @@ const PickupScript := preload("res://scripts/combat/pickup.gd")
 const WeaponScript := preload("res://scripts/combat/weapon.gd")
 const ShakeCamera := preload("res://scripts/m0/shake_camera.gd")
 const Loot := preload("res://scripts/combat/loot.gd")
+const Door := preload("res://scripts/m0/door.gd")
 
 const CELL := 16
-const GRID_W := 44
-const GRID_H := 28
-const MAX_GUARDS := 6
+const GRID_W := 72
+const GRID_H := 44
+const GUARD_CAP := 9         # 场上守卫常驻数(死了会增援补满)
+const GUARD_CAP_FINALE := 13
+const RESPAWN_MIN := 6.0     # 增援间隔
+const RESPAWN_MAX := 10.0
 
 const COLOR_FLOOR := Color("39424f")
 const COLOR_WALL := Color("171c24")
-# 地标房间的地面染色(设计议题 1.4):紫/绿/红,给玩家可指认的"那个房间"
-const ROOM_TINTS: Array = [Color("46394f"), Color("394f41"), Color("4f3a39")]
+# 地标房间的地面染色(设计议题 1.4):给玩家可指认的"那个房间"
+const ROOM_TINTS: Array = [Color("46394f"), Color("394f41"), Color("4f3a39"), Color("3a4a52"), Color("4d4a35")]
 
 var rng := RandomNumberGenerator.new()
 var run_seed := 0
@@ -27,8 +31,9 @@ var grid: Array = []
 var rooms: Array = []
 var astar := AStarGrid2D.new()
 var player: CharacterBody2D
-var guards_total := 0
-var guards_left := 0
+var guard_cap := GUARD_CAP
+var kills := 0
+var respawn_times: Array = []  # 待增援的时间点(elapsed 时间轴)
 var elapsed := 0.0
 var finished := false
 var room_tints := {}  # 房间下标 -> 地标染色
@@ -48,6 +53,7 @@ func _ready() -> void:
 	_pick_landmark_rooms()
 	_setup_astar()
 	_build_walls()
+	_spawn_doors()
 	_setup_darkness()
 	_setup_hud()  # HUD 先建好,玩家 _ready 里发的初始信号才能被接到
 	_spawn_player()
@@ -63,8 +69,16 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not finished:
-		elapsed += delta
+	if finished:
+		return
+	elapsed += delta
+	# 守卫增援:到点且场上没满编,就在远离玩家的房间刷一个
+	for t in respawn_times.duplicate():
+		if elapsed >= t:
+			respawn_times.erase(t)
+			if get_tree().get_nodes_in_group("guards").size() < guard_cap:
+				_spawn_one_guard(true)
+				Game.float_text(player.global_position + Vector2(0, -30), "守卫增援抵达", Color("ff8080"))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -238,30 +252,86 @@ func _spawn_exit() -> void:
 
 
 func _spawn_guards() -> void:
-	# 决赛占位:守卫猎杀加强版,守卫数量上调
-	var cap := 10 if Run.is_finale() else MAX_GUARDS
-	var count := mini(rooms.size() - 1, cap)
-	for i in count:
-		var room: Rect2i = rooms[1 + (i % (rooms.size() - 1))]
-		var g := GuardScript.new()
-		g.setup(self, player, _random_floor_in_room(room), _random_floor_in_room(room))
-		add_child(g)
-		g.global_position = _random_floor_in_room(room)
-	guards_total = count
-	guards_left = count
+	guard_cap = GUARD_CAP_FINALE if Run.is_finale() else GUARD_CAP
+	for i in mini(rooms.size() - 1, guard_cap):
+		_spawn_one_guard(false)
 	_refresh_guard_label()
+
+
+## far_from_player:增援不会刷脸上,挑 180px 以外的房间
+func _spawn_one_guard(far_from_player: bool) -> void:
+	var room: Rect2i = rooms[rng.randi_range(1, rooms.size() - 1)]
+	if far_from_player:
+		for attempt in 12:
+			room = rooms[rng.randi_range(1, rooms.size() - 1)]
+			if _cell_center(room.get_center()).distance_to(player.global_position) > 180.0:
+				break
+	var g := GuardScript.new()
+	g.setup(self, player, _random_floor_in_room(room), _random_floor_in_room(room))
+	add_child(g)
+	g.global_position = _random_floor_in_room(room)
+
+
+## 给每个房间装一道门:扫描房间四边的走廊开口,挑一个装上
+func _spawn_doors() -> void:
+	for room_v in rooms:
+		var room: Rect2i = room_v
+		var gaps := _collect_gaps(room)
+		var candidates: Array = []
+		for g in gaps:
+			if g.cells.size() <= 3:  # 太宽的开口不是门洞,是房间相连
+				candidates.append(g)
+		if candidates.is_empty():
+			continue
+		var gap: Dictionary = candidates[rng.randi_range(0, candidates.size() - 1)]
+		var first: Vector2i = gap.cells[0]
+		var last: Vector2i = gap.cells[gap.cells.size() - 1]
+		var center := (_cell_center(first) + _cell_center(last)) / 2.0
+		var span: int = gap.cells.size() * CELL
+		var door := Door.new()
+		door.setup(Vector2(span, 6) if gap.horizontal else Vector2(6, span))
+		add_child(door)
+		door.global_position = center
+
+
+## 找出房间边界外一圈上的地面开口(走廊入口),按连续段分组
+func _collect_gaps(room: Rect2i) -> Array:
+	var gaps: Array = []
+	var edges := [
+		{"horizontal": true, "y": room.position.y - 1},
+		{"horizontal": true, "y": room.position.y + room.size.y},
+	]
+	for e in edges:
+		var run: Array = []
+		for x in range(room.position.x, room.position.x + room.size.x):
+			if e.y >= 0 and e.y < GRID_H and grid[e.y][x] == 0:
+				run.append(Vector2i(x, e.y))
+			elif not run.is_empty():
+				gaps.append({"cells": run.duplicate(), "horizontal": true})
+				run.clear()
+		if not run.is_empty():
+			gaps.append({"cells": run, "horizontal": true})
+	var vedges := [room.position.x - 1, room.position.x + room.size.x]
+	for vx in vedges:
+		var run: Array = []
+		for y in range(room.position.y, room.position.y + room.size.y):
+			if vx >= 0 and vx < GRID_W and grid[y][vx] == 0:
+				run.append(Vector2i(vx, y))
+			elif not run.is_empty():
+				gaps.append({"cells": run.duplicate(), "horizontal": false})
+				run.clear()
+		if not run.is_empty():
+			gaps.append({"cells": run, "horizontal": false})
+	return gaps
 
 
 func _spawn_weapon_crates() -> void:
 	# 每局从武器池随机预放 3 把(去重),验证"捡随机武器"的循环;
 	# 近战必出 1 把——无声击杀流不该看运气脸色
+	# 地图变大了:近战保底 1 把 + 三把枪全放,但散得更开
 	var melee_pool: Array = [WeaponScript.KNIFE, WeaponScript.AXE]
-	var gun_pool: Array = [WeaponScript.SHOTGUN, WeaponScript.SMG, WeaponScript.RIFLE]
-	var picks: Array = [melee_pool[rng.randi_range(0, melee_pool.size() - 1)]]
-	for i in 2:
-		var pick = gun_pool[rng.randi_range(0, gun_pool.size() - 1)]
-		gun_pool.erase(pick)
-		picks.append(pick)
+	var picks: Array = [melee_pool[rng.randi_range(0, melee_pool.size() - 1)],
+		WeaponScript.SHOTGUN, WeaponScript.SMG, WeaponScript.RIFLE]
 	for stats in picks:
 		if rooms.size() < 3:
 			break
@@ -274,7 +344,7 @@ func _spawn_weapon_crates() -> void:
 
 func _spawn_loot() -> void:
 	# 迷宫里的稀有物:这关挨枪子,食物(回血)和钱对半分
-	for i in 3:
+	for i in 6:
 		if rooms.size() < 3:
 			break
 		var room: Rect2i = rooms[rng.randi_range(1, rooms.size() - 2)]
@@ -325,11 +395,13 @@ func _on_weapon_equipped(stats: Dictionary) -> void:
 
 
 func _refresh_guard_label() -> void:
-	hud_guards.text = "守卫 %d/%d" % [guards_left, guards_total]
+	hud_guards.text = "击杀 %d · 守卫增援不断" % kills
 
 
 func _on_guard_died(_guard: Node) -> void:
-	guards_left -= 1
+	kills += 1
+	if not finished:
+		respawn_times.append(elapsed + rng.randf_range(RESPAWN_MIN, RESPAWN_MAX))
 	_refresh_guard_label()
 
 
@@ -346,7 +418,7 @@ func _on_exit_reached() -> void:
 	if finished:
 		return
 	finished = true
-	var stats_line := "逃出迷宫!用时 %.1f 秒,击杀守卫 %d/%d" % [elapsed, guards_total - guards_left, guards_total]
+	var stats_line := "逃出迷宫!用时 %.1f 秒,击杀守卫 %d" % [elapsed, kills]
 	hud_msg.text = stats_line if Run.active else stats_line + " —— 按 R 再来一局"
 	hud_msg.visible = true
 	if Run.active:
