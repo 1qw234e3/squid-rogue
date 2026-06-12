@@ -9,6 +9,7 @@ const GuardScript := preload("res://scripts/actors/guard.gd")
 const PickupScript := preload("res://scripts/combat/pickup.gd")
 const WeaponScript := preload("res://scripts/combat/weapon.gd")
 const ShakeCamera := preload("res://scripts/m0/shake_camera.gd")
+const Loot := preload("res://scripts/combat/loot.gd")
 
 const CELL := 16
 const GRID_W := 44
@@ -53,6 +54,7 @@ func _ready() -> void:
 	_spawn_exit()
 	_spawn_guards()
 	_spawn_weapon_crates()
+	_spawn_loot()
 	EventBus.guard_died.connect(_on_guard_died)
 	EventBus.player_died.connect(_on_player_died)
 	EventBus.exit_reached.connect(_on_exit_reached)
@@ -234,6 +236,22 @@ func _spawn_weapon_crates() -> void:
 		p.setup(stats)
 		add_child(p)
 		p.global_position = _random_floor_in_room(room)
+
+
+func _spawn_loot() -> void:
+	# 迷宫里的稀有物:这关挨枪子,食物(回血)和钱对半分
+	for i in 3:
+		if rooms.size() < 3:
+			break
+		var room: Rect2i = rooms[rng.randi_range(1, rooms.size() - 2)]
+		var loot := Loot.new()
+		if rng.randf() < 0.5:
+			loot.kind = "food"
+		else:
+			loot.kind = "money"
+			loot.amount = rng.randi_range(20, 40)
+		add_child(loot)
+		loot.global_position = _random_floor_in_room(room)
 
 
 # ---------- HUD ----------

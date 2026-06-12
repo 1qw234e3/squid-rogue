@@ -69,6 +69,22 @@ func ui_font() -> SystemFont:
 	return _ui_font
 
 
+## 世界坐标处冒一行小字,上浮淡出(拾取/奖励提示通用)
+func float_text(pos: Vector2, text: String, color := Color.WHITE) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", ui_font())
+	l.add_theme_font_size_override("font_size", 8)
+	l.modulate = color
+	get_tree().current_scene.add_child(l)
+	l.global_position = pos + Vector2(-20, -18)
+	var tw := l.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(l, "position:y", l.position.y - 14.0, 0.8)
+	tw.tween_property(l, "modulate:a", 0.0, 0.6).set_delay(0.3)
+	get_tree().create_timer(1.0).timeout.connect(l.queue_free)
+
+
 ## UI 快捷:建一个用中文字体的 Label(默认字体不含中文)
 func make_label(parent: Node, pos: Vector2, font_size: int, text := "") -> Label:
 	var l := Label.new()

@@ -6,6 +6,8 @@ extends Node2D
 
 const PlayerScript := preload("res://scripts/actors/player.gd")
 const ShakeCamera := preload("res://scripts/m0/shake_camera.gd")
+const Contestant := preload("res://scripts/actors/contestant.gd")
+const Loot := preload("res://scripts/combat/loot.gd")
 
 const CELL := 16
 const FIELD_W := 60
@@ -16,11 +18,17 @@ const VIOLATE_TIME := 0.2   # 超阈值累计多久触发预瞄
 const LASER_TIME := 0.5     # 预瞄到开枪的窗口
 const COVER_COUNT := 12
 const COVER_HP := 3
+const NPC_COUNT := 14
+const LOOT_COUNT := 4
 
 enum Light { GREEN, WARN, RED }
 
 var light := Light.GREEN
 var light_timer := 2.0
+var time_in_light := 0.0   # 进入当前灯态多久了(NPC 反应判定用)
+var contestants: Array = []
+var kill_queue: Array = []  # {npc, t}:已被判违规、等待处决的 NPC
+var guard_posts: Array = [] # 场边守卫哨位坐标,处决枪从最近哨位打出
 var time_left := TIME_LIMIT
 var violate := 0.0
 var laser_timer := -1.0
@@ -36,6 +44,8 @@ var tint: CanvasModulate
 var hud_light: Label
 var hud_time: Label
 var hud_msg: Label
+var hud_cast: Label
+var cast_timer := 0.0
 
 
 func _ready() -> void:
@@ -45,6 +55,9 @@ func _ready() -> void:
 	_spawn_player()
 	_spawn_covers()
 	_build_doll()
+	_build_guard_posts()
+	_spawn_contestants()
+	_spawn_loot()
 	_setup_hud()
 	tint = CanvasModulate.new()
 	add_child(tint)
@@ -61,7 +74,13 @@ func _process(delta: float) -> void:
 	if finished:
 		return
 	time_left -= delta
+	time_in_light += delta
 	hud_time.text = "%d" % maxi(ceili(time_left), 0)
+	_process_kill_queue(delta)
+	if cast_timer > 0.0:
+		cast_timer -= delta
+		if cast_timer <= 0.0:
+			hud_cast.modulate.a = 0.0
 	if time_left <= 0.0:
 		_snipe_player()  # 超时 = 直接清场
 		_eliminate("超时")
@@ -80,7 +99,7 @@ func _process(delta: float) -> void:
 				_set_light(Light.GREEN)
 	if laser_timer >= 0.0:
 		laser_timer -= delta
-		laser.points = PackedVector2Array([doll_eye_pos, player.global_position])
+		laser.points = PackedVector2Array([_nearest_post(player.global_position), player.global_position])
 		if laser_timer < 0.0:
 			_resolve_shot()
 	if player.global_position.x >= finish_x and not finished:
@@ -89,9 +108,16 @@ func _process(delta: float) -> void:
 
 # ---------- 灯与判定 ----------
 
+func is_green() -> bool:
+	return light == Light.GREEN
+
+
 func _set_light(s: Light) -> void:
 	light = s
 	violate = 0.0
+	time_in_light = 0.0
+	if s == Light.RED:
+		_roll_npc_violations()
 	match s:
 		Light.GREEN:
 			light_timer = rng.randf_range(2.5, 5.0)
@@ -130,17 +156,80 @@ func _check_violation(delta: float) -> void:
 func _resolve_shot() -> void:
 	laser.visible = false
 	laser_timer = -1.0
-	# 从娃娃眼睛到玩家打射线:被掩体挡住 → 掩体挨这一枪;否则玩家挨
-	var params := PhysicsRayQueryParameters2D.create(doll_eye_pos, player.global_position, 1)
+	# 处决枪从最近的场边守卫哨位打出:被掩体挡住 → 掩体挨这一枪;否则玩家挨
+	var post := _nearest_post(player.global_position)
+	var params := PhysicsRayQueryParameters2D.create(post, player.global_position, 1)
 	var hit := get_world_2d().direct_space_state.intersect_ray(params)
 	Game.play_sfx("shoot_heavy", 0.9)
 	Game.shake(3.0)
+	_tracer(post, player.global_position)
 	if hit.is_empty():
 		_snipe_player()
 		if player.hp <= 0:
 			_eliminate("红灯期间移动")
 	else:
 		_damage_cover(hit.collider)
+
+
+# ---------- 参赛者 NPC 与处决 ----------
+
+## 红灯落下的瞬间,给每个活着的 NPC 掷反应延迟;滑出太多的进处决队列
+func _roll_npc_violations() -> void:
+	for npc in contestants:
+		if npc.dead or npc.done:
+			continue
+		npc.reaction = maxf(0.0, (1.0 - npc.courage) * rng.randf_range(0.0, 0.4))
+		if npc.reaction > 0.15 and rng.randf() < 0.5:
+			kill_queue.append({"npc": npc, "t": npc.reaction + 0.35})
+
+
+func _process_kill_queue(delta: float) -> void:
+	for entry in kill_queue.duplicate():
+		entry.t -= delta
+		if entry.t > 0.0:
+			continue
+		kill_queue.erase(entry)
+		var npc: CharacterBody2D = entry.npc
+		if npc.dead or npc.done:
+			continue
+		var post := _nearest_post(npc.global_position)
+		# 躲到掩体后的 NPC 也能逃过一劫——规则对所有人一致,玩家看得懂
+		var params := PhysicsRayQueryParameters2D.create(post, npc.global_position, 1)
+		if not get_world_2d().direct_space_state.intersect_ray(params).is_empty():
+			continue
+		_tracer(post, npc.global_position)
+		Game.play_sfx_at("shoot_heavy", npc.global_position, 0.9)
+		npc.die()
+		_broadcast("第 %02d 号参赛者,淘汰。" % npc.number)
+		# 死者遗物:35% 掉一小袋配给券,绿灯里去舔包是风险换钱
+		if rng.randf() < 0.35:
+			_drop_loot("money", rng.randi_range(10, 30), npc.global_position + Vector2(8, 0))
+
+
+func _nearest_post(pos: Vector2) -> Vector2:
+	var best: Vector2 = guard_posts[0]
+	for p in guard_posts:
+		if p.distance_to(pos) < best.distance_to(pos):
+			best = p
+	return best
+
+
+## 处决弹道:一条瞬间画满、快速淡出的亮线
+func _tracer(from: Vector2, to: Vector2) -> void:
+	var line := Line2D.new()
+	line.width = 1.5
+	line.default_color = Color(1.0, 0.9, 0.7, 0.9)
+	line.points = PackedVector2Array([from, to])
+	add_child(line)
+	var tw := line.create_tween()
+	tw.tween_property(line, "modulate:a", 0.0, 0.15)
+	tw.tween_callback(line.queue_free)
+
+
+func _broadcast(text: String) -> void:
+	hud_cast.text = "【广播】" + text
+	hud_cast.modulate.a = 1.0
+	cast_timer = 3.0
 
 
 func _snipe_player() -> void:
@@ -244,6 +333,53 @@ func _spawn_covers() -> void:
 		covers.append({"body": body, "visual": visual, "hp": COVER_HP})
 
 
+func _build_guard_posts() -> void:
+	# 场边四个守卫哨位:上下各两个,处决枪从这里打出——"谁在执法"看得见
+	var xs := [FIELD_W * 0.35, FIELD_W * 0.7]
+	for x in xs:
+		guard_posts.append(Vector2(x * CELL, CELL * 1.5))
+		guard_posts.append(Vector2(x * CELL, (FIELD_H - 1.5) * CELL))
+	for p in guard_posts:
+		var g := ColorRect.new()
+		g.size = Vector2(12, 18)
+		g.position = p - Vector2(6, 9)
+		g.color = Color("b3543d")  # 铜盔守卫占位色
+		add_child(g)
+
+
+func _spawn_contestants() -> void:
+	for i in NPC_COUNT:
+		var npc := Contestant.new()
+		npc.setup(self, i + 1 if i + 1 < 23 else i + 2, rng.randf())  # 23 号留给玩家
+		add_child(npc)
+		npc.global_position = Vector2(
+			rng.randf_range(1.5, 3.0) * CELL,
+			rng.randf_range(2.0, FIELD_H - 2.0) * CELL
+		)
+		contestants.append(npc)
+
+
+func _spawn_loot() -> void:
+	# 稀有物以钱和食物为主:60% 钱袋 / 25% 稀有钱箱 / 15% 食物
+	for i in LOOT_COUNT:
+		var roll := rng.randf()
+		var pos := Vector2(rng.randf_range(10.0, FIELD_W - 10.0), rng.randf_range(3.0, FIELD_H - 3.0)) * CELL
+		if roll < 0.6:
+			_drop_loot("money", rng.randi_range(20, 50), pos)
+		elif roll < 0.85:
+			_drop_loot("cache", rng.randi_range(120, 180), pos)
+		else:
+			_drop_loot("food", 0, pos)
+
+
+func _drop_loot(kind: String, amount: int, pos: Vector2) -> void:
+	var loot := Loot.new()
+	loot.kind = kind
+	loot.amount = amount
+	add_child(loot)
+	loot.global_position = pos
+
+
 func _build_doll() -> void:
 	var doll_pos := Vector2((FIELD_W - 2) * CELL, FIELD_H * CELL / 2.0)
 	var body := ColorRect.new()
@@ -271,3 +407,7 @@ func _setup_hud() -> void:
 	hud_msg.size = Vector2(640, 40)
 	hud_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hud_msg.visible = false
+	hud_cast = Game.make_label(layer, Vector2(0, 310), 9)
+	hud_cast.size = Vector2(640, 16)
+	hud_cast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hud_cast.modulate.a = 0.0

@@ -103,6 +103,13 @@ func _try_pickup() -> void:
 			return
 
 
+func heal(amount: int) -> void:
+	if hp <= 0:
+		return
+	hp = mini(hp + amount, MAX_HP)
+	EventBus.player_hp_changed.emit(hp, MAX_HP)
+
+
 func take_damage(dmg: int, from_dir: Vector2) -> void:
 	if rolling or hp <= 0:
 		return  # 翻滚期间免伤 = 无敌帧
