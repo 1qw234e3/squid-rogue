@@ -4,6 +4,9 @@ extends Node
 
 const SFX_PATHS := {
 	"shoot": "res://assets/sfx/shoot.wav",
+	"shoot_heavy": "res://assets/sfx/shoot_heavy.wav",
+	"swing": "res://assets/sfx/swing.wav",
+	"melee_hit": "res://assets/sfx/melee_hit.wav",
 	"hit": "res://assets/sfx/hit.wav",
 	"kill": "res://assets/sfx/kill.wav",
 	"roll": "res://assets/sfx/roll.wav",

@@ -9,7 +9,6 @@ const GuardScript := preload("res://scripts/actors/guard.gd")
 const PickupScript := preload("res://scripts/combat/pickup.gd")
 const WeaponScript := preload("res://scripts/combat/weapon.gd")
 const ShakeCamera := preload("res://scripts/m0/shake_camera.gd")
-const ExitArrow := preload("res://scripts/m0/exit_arrow.gd")
 
 const CELL := 16
 const GRID_W := 44
@@ -199,10 +198,6 @@ func _spawn_exit() -> void:
 	add_child(exit)
 	exit.global_position = _cell_center(room.get_center())
 	exit.body_entered.connect(func(_body: Node) -> void: EventBus.exit_reached.emit())
-	# 出口方向箭头挂在玩家身上(设计议题 1.4:没有它找出口全靠瞎逛)
-	var arrow := ExitArrow.new()
-	arrow.target_pos = exit.global_position
-	player.add_child(arrow)
 
 
 func _spawn_guards() -> void:
@@ -219,14 +214,21 @@ func _spawn_guards() -> void:
 
 
 func _spawn_weapon_crates() -> void:
-	# 迷宫里预放两把强力武器,验证"捡随机武器"的循环
-	var pool := [WeaponScript.SHOTGUN, WeaponScript.SMG]
-	for i in pool.size():
+	# 每局从武器池随机预放 3 把(去重),验证"捡随机武器"的循环;
+	# 近战必出 1 把——无声击杀流不该看运气脸色
+	var melee_pool: Array = [WeaponScript.KNIFE, WeaponScript.AXE]
+	var gun_pool: Array = [WeaponScript.SHOTGUN, WeaponScript.SMG, WeaponScript.RIFLE]
+	var picks: Array = [melee_pool[rng.randi_range(0, melee_pool.size() - 1)]]
+	for i in 2:
+		var pick = gun_pool[rng.randi_range(0, gun_pool.size() - 1)]
+		gun_pool.erase(pick)
+		picks.append(pick)
+	for stats in picks:
 		if rooms.size() < 3:
 			break
 		var room: Rect2i = rooms[rng.randi_range(1, rooms.size() - 2)]
 		var p := PickupScript.new()
-		p.setup(pool[i])
+		p.setup(stats)
 		add_child(p)
 		p.global_position = _random_floor_in_room(room)
 

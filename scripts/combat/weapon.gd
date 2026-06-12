@@ -5,23 +5,42 @@ extends Node2D
 
 const Bullet := preload("res://scripts/combat/bullet.gd")
 const NoiseRing := preload("res://scripts/combat/noise_ring.gd")
+const SlashFx := preload("res://scripts/combat/slash_fx.gd")
 
-# noise = 枪声噪音半径(设计议题 1.3):圈内守卫会赶来查看。守卫步枪不触发(0)
+# noise = 噪音半径(设计议题 1.3):圈内守卫会赶来查看。
+# 近战 noise=0 —— 无声击杀流的核心,与潜行系统直接挂钩
 const PISTOL := {
 	"name": "手枪", "fire_rate": 4.0, "bullets": 1, "spread": 0.06,
-	"bullet_speed": 280.0, "damage": 1, "shake": 1.5, "noise": 130.0, "color": Color("ffe07a"),
+	"bullet_speed": 280.0, "damage": 1, "shake": 1.5, "noise": 130.0,
+	"sfx": "shoot", "color": Color("ffe07a"),
 }
 const SMG := {
 	"name": "冲锋枪", "fire_rate": 9.0, "bullets": 1, "spread": 0.16,
-	"bullet_speed": 300.0, "damage": 1, "shake": 1.2, "noise": 110.0, "color": Color("8aff9e"),
+	"bullet_speed": 300.0, "damage": 1, "shake": 1.2, "noise": 110.0,
+	"sfx": "shoot", "color": Color("8aff9e"),
 }
 const SHOTGUN := {
 	"name": "霰弹枪", "fire_rate": 1.6, "bullets": 5, "spread": 0.38,
-	"bullet_speed": 250.0, "damage": 1, "shake": 4.0, "noise": 180.0, "color": Color("ff9e6b"),
+	"bullet_speed": 250.0, "damage": 1, "shake": 4.0, "noise": 180.0,
+	"sfx": "shoot_heavy", "color": Color("ff9e6b"),
+}
+const RIFLE := {
+	"name": "步枪", "fire_rate": 2.2, "bullets": 1, "spread": 0.02,
+	"bullet_speed": 420.0, "damage": 2, "shake": 2.5, "noise": 160.0,
+	"sfx": "shoot_heavy", "color": Color("9ecbff"),
 }
 const GUARD_RIFLE := {
 	"name": "守卫步枪", "fire_rate": 1.3, "bullets": 1, "spread": 0.1,
-	"bullet_speed": 190.0, "damage": 1, "shake": 0.0, "noise": 0.0, "color": Color("ff5a5a"),
+	"bullet_speed": 190.0, "damage": 1, "shake": 0.0, "noise": 0.0,
+	"sfx": "shoot_heavy", "color": Color("ff5a5a"),
+}
+const KNIFE := {
+	"name": "小刀", "type": "melee", "fire_rate": 3.5, "damage": 1,
+	"range": 24.0, "arc": PI * 0.7, "shake": 1.0, "noise": 0.0, "color": Color("d8dee6"),
+}
+const AXE := {
+	"name": "消防斧", "type": "melee", "fire_rate": 1.1, "damage": 3,
+	"range": 30.0, "arc": PI * 0.9, "shake": 3.0, "noise": 0.0, "color": Color("ff6b6b"),
 }
 
 var stats := PISTOL
@@ -66,16 +85,20 @@ func try_fire() -> void:
 	if cooldown > 0.0:
 		return
 	cooldown = 1.0 / (float(stats.fire_rate) * Tune.fire_rate_scale)
+	if str(stats.get("type", "gun")) == "melee":
+		_melee_attack()
+		return
 	for i in int(stats.bullets):
 		var ang: float = rotation + randf_range(-stats.spread, stats.spread)
 		var b := Bullet.new()
 		get_tree().current_scene.add_child(b)
 		b.launch(global_position + Vector2.from_angle(ang) * 12.0, ang, stats, shooter_group, bullet_mask)
 	Game.shake(stats.shake)
+	var sfx := str(stats.get("sfx", "shoot"))
 	if shooter_group == "guards":
-		Game.play_sfx_at("shoot", global_position, 0.8)  # 守卫枪声:带方位 + 低八度
+		Game.play_sfx_at(sfx, global_position, 0.85)  # 守卫枪声:带方位 + 低音调
 	else:
-		Game.play_sfx("shoot")
+		Game.play_sfx(sfx)
 	# 枪声广播噪音事件,并给玩家画出"这一枪谁能听见"的可视化圈
 	var noise := float(stats.get("noise", 0.0))
 	if noise > 0.0:
@@ -87,6 +110,35 @@ func try_fire() -> void:
 			ring.global_position = global_position
 	_muzzle_flash()
 	_eject_shell()
+
+
+## 近战:扇形范围内、未被墙挡住的敌人全部吃伤害。无枪口火光无抛壳无噪音
+func _melee_attack() -> void:
+	var enemy_group := "guards" if shooter_group == "player" else "player"
+	var dir := Vector2.from_angle(rotation)
+	var reach: float = float(stats.range) + 10.0  # 容差:目标有体积
+	for body in get_tree().get_nodes_in_group(enemy_group):
+		if not (body is Node2D) or not body.has_method("take_damage"):
+			continue
+		var to: Vector2 = body.global_position - global_position
+		if to.length() > reach or absf(dir.angle_to(to)) > float(stats.arc) / 2.0:
+			continue
+		# 不能隔墙砍
+		var params := PhysicsRayQueryParameters2D.create(global_position, body.global_position, 1)
+		if not get_world_2d().direct_space_state.intersect_ray(params).is_empty():
+			continue
+		body.take_damage(stats.damage, to.normalized())
+		Game.hitstop()
+		Game.play_sfx("melee_hit")
+	Game.shake(stats.shake)
+	Game.play_sfx("swing")
+	var slash := SlashFx.new()
+	slash.arc = stats.arc
+	slash.range_px = stats.range
+	slash.color = stats.color
+	get_tree().current_scene.add_child(slash)
+	slash.global_position = global_position
+	slash.rotation = rotation
 
 
 func _muzzle_flash() -> void:

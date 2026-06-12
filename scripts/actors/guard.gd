@@ -303,8 +303,9 @@ func _die() -> void:
 	Game.play_sfx_at("kill", global_position)
 	# 40% 掉武器:反杀的核心奖励(设计文档 §3.7)
 	if randf() < 0.4:
+		var drop_pool: Array = [Weapon.SMG, Weapon.SHOTGUN, Weapon.RIFLE]
 		var p := Pickup.new()
-		p.setup(Weapon.SMG if randf() < 0.5 else Weapon.SHOTGUN)
+		p.setup(drop_pool[randi() % drop_pool.size()])
 		get_tree().current_scene.add_child(p)
 		p.global_position = global_position
 	# 尸体占位:一块停留几秒后淡出的色块
