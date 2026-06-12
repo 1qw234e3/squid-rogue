@@ -275,11 +275,23 @@ func _cancel_telegraph() -> void:
 		aim_line.visible = false
 
 
-## 噪音响应:追捕中不分心;巡逻/搜索中赶去查看声源(设计议题 1.3)
+## 噪音响应(设计议题 1.3),分级感应:
+## - 追捕中:每声枪响刷新"最后目击点"——边逃边开枪 = 一路报坐标
+## - 近距离(噪音半径 55% 内):听声辨人,直接锁定开枪者进入追捕
+## - 远距离:只知道大概方位,赶去查看声源
 func _on_noise(pos: Vector2, radius: float, source_group: String) -> void:
-	if hp <= 0 or source_group == "guards" or state == State.CHASE:
+	if hp <= 0 or source_group == "guards":
 		return
-	if global_position.distance_to(pos) <= radius:
+	var dist := global_position.distance_to(pos)
+	if dist > radius:
+		return
+	if state == State.CHASE:
+		last_seen = pos
+		lose_timer = 0.0
+		return
+	if dist <= radius * 0.55:
+		force_chase()
+	else:
 		_begin_search(pos)
 
 
