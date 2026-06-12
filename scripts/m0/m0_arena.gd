@@ -48,6 +48,7 @@ func _ready() -> void:
 	_pick_landmark_rooms()
 	_setup_astar()
 	_build_walls()
+	_setup_darkness()
 	_setup_hud()  # HUD 先建好,玩家 _ready 里发的初始信号才能被接到
 	_spawn_player()
 	_setup_camera()
@@ -149,6 +150,17 @@ func _build_walls() -> void:
 				shape.shape = rect
 				shape.position = Vector2((start + x) * CELL / 2.0, y * CELL + CELL / 2.0)
 				body.add_child(shape)
+				# 同一段墙再挂一个遮光体:光被墙挡住,拐角后面真的看不见
+				var occluder := LightOccluder2D.new()
+				var poly := OccluderPolygon2D.new()
+				var half := rect.size / 2.0
+				poly.polygon = PackedVector2Array([
+					Vector2(-half.x, -half.y), Vector2(half.x, -half.y),
+					Vector2(half.x, half.y), Vector2(-half.x, half.y),
+				])
+				occluder.occluder = poly
+				occluder.position = shape.position
+				body.add_child(occluder)
 			else:
 				x += 1
 
@@ -163,10 +175,24 @@ func _random_floor_in_room(room: Rect2i) -> Vector2:
 	return _cell_center(c)
 
 
+## 全场压黑:环境漆黑,地图只在玩家手电的光里呈现(§3.2 夜战变体常驻本关)
+func _setup_darkness() -> void:
+	var dark := CanvasModulate.new()
+	dark.color = Color(0.13, 0.14, 0.18)
+	add_child(dark)
+
+
 func _spawn_player() -> void:
 	player = PlayerScript.new()
 	add_child(player)
 	player.global_position = _cell_center((rooms[0] as Rect2i).get_center())
+	# 手电:跟着玩家走的光源,被墙遮挡出真实视线
+	var torch := PointLight2D.new()
+	torch.texture = Game.radial_light_texture()
+	torch.texture_scale = 1.5  # 光圈半径约 190px(12 格)
+	torch.energy = 1.4
+	torch.shadow_enabled = true
+	player.add_child(torch)
 
 
 func _setup_camera() -> void:
@@ -198,6 +224,14 @@ func _spawn_exit() -> void:
 	mark.position = -mark.size / 2.0
 	mark.color = Color("4caf6e")
 	exit.add_child(mark)
+	# 出口常亮一盏绿灯:黑暗里远远的一点绿光,就是导航
+	var beacon := PointLight2D.new()
+	beacon.texture = Game.radial_light_texture()
+	beacon.texture_scale = 0.7
+	beacon.energy = 1.1
+	beacon.color = Color("6bdF8e")
+	beacon.shadow_enabled = true
+	exit.add_child(beacon)
 	add_child(exit)
 	exit.global_position = _cell_center(room.get_center())
 	exit.body_entered.connect(func(_body: Node) -> void: EventBus.exit_reached.emit())

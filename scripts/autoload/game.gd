@@ -16,6 +16,7 @@ const SFX_PATHS := {
 var camera: Camera2D
 var _hitstopping := false
 var _ui_font: SystemFont
+var _light_tex: GradientTexture2D
 var _sfx_players: Array = []
 var _sfx_streams := {}
 var _sfx_index := 0
@@ -67,6 +68,22 @@ func ui_font() -> SystemFont:
 		_ui_font = SystemFont.new()
 		_ui_font.font_names = PackedStringArray(["PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC"])
 	return _ui_font
+
+
+## 径向渐变光斑贴图(缓存共享):PointLight2D 通用,中心亮边缘透明
+func radial_light_texture() -> GradientTexture2D:
+	if _light_tex == null:
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1, 1, 1, 1))
+		grad.set_color(1, Color(1, 1, 1, 0))
+		_light_tex = GradientTexture2D.new()
+		_light_tex.gradient = grad
+		_light_tex.fill = GradientTexture2D.FILL_RADIAL
+		_light_tex.fill_from = Vector2(0.5, 0.5)
+		_light_tex.fill_to = Vector2(0.5, 0.0)
+		_light_tex.width = 256
+		_light_tex.height = 256
+	return _light_tex
 
 
 ## 世界坐标处冒一行小字,上浮淡出(拾取/奖励提示通用)

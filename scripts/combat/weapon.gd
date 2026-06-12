@@ -50,6 +50,7 @@ var bullet_mask := 0
 var cooldown := 0.0
 var barrel: ColorRect
 var flash_rect: ColorRect
+var flash_light: PointLight2D
 
 
 func _ready() -> void:
@@ -64,6 +65,14 @@ func _ready() -> void:
 	flash_rect.color = Color(1.0, 1.0, 0.8)
 	flash_rect.visible = false
 	add_child(flash_rect)
+	# 枪口闪光灯:黑暗关里开枪会真的照亮一瞬——也照亮你自己的位置
+	flash_light = PointLight2D.new()
+	flash_light.texture = Game.radial_light_texture()
+	flash_light.texture_scale = 0.6
+	flash_light.energy = 0.0
+	flash_light.color = Color(1.0, 0.9, 0.6)
+	flash_light.position = Vector2(12, 0)
+	add_child(flash_light)
 
 
 func setup(s: Dictionary, group: String, mask: int) -> void:
@@ -144,12 +153,14 @@ func _melee_attack() -> void:
 
 func _muzzle_flash() -> void:
 	flash_rect.visible = true
+	flash_light.energy = 1.2
 	# 用信号连接而不是 await:武器若中途被释放,连接会自动断开,不会报错
 	get_tree().create_timer(0.06).timeout.connect(_hide_flash)
 
 
 func _hide_flash() -> void:
 	flash_rect.visible = false
+	flash_light.energy = 0.0
 
 
 func _eject_shell() -> void:
