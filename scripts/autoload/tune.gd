@@ -11,6 +11,7 @@ var bullet_speed_scale := 1.0
 var knockback_scale := 1.0
 
 var panel: PanelContainer
+var _dragging := false  # 滑条抓着鼠标时为真,即使鼠标甩出了面板边缘
 
 
 func _ready() -> void:
@@ -43,9 +44,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		visible = not visible
 
 
-## 鼠标悬在面板上时玩家停火,否则拖滑条会一直放枪
+## 鼠标悬在面板上、或正拖着滑条(哪怕甩出面板边缘)时,玩家停火
 func mouse_over_panel() -> bool:
-	return visible and panel.get_global_rect().has_point(panel.get_global_mouse_position())
+	return visible and (_dragging or panel.get_global_rect().has_point(panel.get_global_mouse_position()))
 
 
 func _style(control: Control, font_size: int) -> void:
@@ -68,6 +69,8 @@ func _add_slider(vbox: VBoxContainer, text: String, minv: float, maxv: float, st
 	slider.value = initial
 	slider.custom_minimum_size = Vector2(130, 12)
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider.drag_started.connect(func() -> void: _dragging = true)
+	slider.drag_ended.connect(func(_changed: bool) -> void: _dragging = false)
 	row.add_child(slider)
 	var value_label := Label.new()
 	value_label.text = _fmt(initial)

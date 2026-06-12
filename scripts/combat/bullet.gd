@@ -52,7 +52,9 @@ func _on_body_entered(body: Node) -> void:
 	if body.has_method("take_damage"):
 		body.take_damage(damage, dir)
 		Game.hitstop()
-		Game.play_sfx("hit")
+		# 只给打中守卫配声;打中玩家的音效由玩家自己发(低音调),避免双重音
+		if body.is_in_group("guards"):
+			Game.play_sfx_at("hit", global_position)
 	_spawn_hit_fx()
 	queue_free()
 

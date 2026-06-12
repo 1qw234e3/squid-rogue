@@ -70,7 +70,10 @@ func try_fire() -> void:
 		get_tree().current_scene.add_child(b)
 		b.launch(global_position + Vector2.from_angle(ang) * 12.0, ang, stats, shooter_group, bullet_mask)
 	Game.shake(stats.shake)
-	Game.play_sfx("shoot", 0.8 if shooter_group == "guards" else 1.0)  # 守卫枪声调低,听声辨位
+	if shooter_group == "guards":
+		Game.play_sfx_at("shoot", global_position, 0.8)  # 守卫枪声:带方位 + 低八度
+	else:
+		Game.play_sfx("shoot")
 	_muzzle_flash()
 	_eject_shell()
 

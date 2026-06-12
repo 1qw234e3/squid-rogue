@@ -35,12 +35,26 @@ func _ready() -> void:
 		assert(_sfx_streams[key] != null, "音效加载失败: " + SFX_PATHS[key])
 
 
-## 播放占位音效,带轻微随机变调,连续开枪不会像机器
+## 播放占位音效(无方位,用于玩家自身/UI),带轻微随机变调
 func play_sfx(sfx: String, pitch := 1.0) -> void:
 	var p: AudioStreamPlayer = _sfx_players[_sfx_index]
 	_sfx_index = (_sfx_index + 1) % _sfx_players.size()
 	p.stream = _sfx_streams[sfx]
 	p.pitch_scale = pitch * randf_range(0.92, 1.08)
+	p.play()
+
+
+## 在世界坐标上播放(自动 pan + 距离衰减):守卫的声音都走这里,听声辨位
+func play_sfx_at(sfx: String, pos: Vector2, pitch := 1.0) -> void:
+	var p := AudioStreamPlayer2D.new()
+	p.stream = _sfx_streams[sfx]
+	p.volume_db = -8.0
+	p.max_distance = 280.0  # 可听半径,略小于半个屏幕宽;要对齐警觉半径就调这里
+	p.attenuation = 1.5
+	p.pitch_scale = pitch * randf_range(0.92, 1.08)
+	get_tree().current_scene.add_child(p)
+	p.global_position = pos
+	p.finished.connect(p.queue_free)
 	p.play()
 
 

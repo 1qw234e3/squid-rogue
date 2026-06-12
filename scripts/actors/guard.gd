@@ -155,7 +155,7 @@ func force_chase() -> void:
 		return
 	state = State.CHASE
 	cone.color = Color(1.0, 0.25, 0.2, 0.14)  # 视锥变红 = 已警觉
-	Game.play_sfx("alert")
+	Game.play_sfx_at("alert", global_position)  # 带方位:从哪边被发现,听得出来
 
 
 func _enter_chase() -> void:
@@ -181,7 +181,7 @@ func take_damage(dmg: int, from_dir: Vector2) -> void:
 
 func _die() -> void:
 	EventBus.guard_died.emit(self)
-	Game.play_sfx("kill")
+	Game.play_sfx_at("kill", global_position)
 	# 40% 掉武器:反杀的核心奖励(设计文档 §3.7:反杀守卫掉落)
 	if randf() < 0.4:
 		var p := Pickup.new()
