@@ -1,0 +1,54 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scenes/levels/lesson_player.gd" id="1_player"]
+
+[sub_resource type="RectangleShape2D" id="shape_player"]
+size = Vector2(32, 32)
+
+[sub_resource type="RectangleShape2D" id="shape_wall_h"]
+size = Vector2(1216, 32)
+
+[sub_resource type="RectangleShape2D" id="shape_wall_v"]
+size = Vector2(32, 712)
+
+[node name="Lesson" type="Node2D"]
+
+[node name="Player" type="CharacterBody2D" parent="."]
+position = Vector2(576, 324)
+script = ExtResource("1_player")
+
+[node name="BodyRect" type="ColorRect" parent="Player"]
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+color = Color(0.3, 0.8, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+shape = SubResource("shape_player")
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Top" type="StaticBody2D" parent="Walls"]
+position = Vector2(576, -16)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Top"]
+shape = SubResource("shape_wall_h")
+
+[node name="Bottom" type="StaticBody2D" parent="Walls"]
+position = Vector2(576, 664)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Bottom"]
+shape = SubResource("shape_wall_h")
+
+[node name="Left" type="StaticBody2D" parent="Walls"]
+position = Vector2(-16, 324)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Left"]
+shape = SubResource("shape_wall_v")
+
+[node name="Right" type="StaticBody2D" parent="Walls"]
+position = Vector2(1168, 324)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Right"]
+shape = SubResource("shape_wall_v")
