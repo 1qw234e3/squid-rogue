@@ -63,13 +63,14 @@ func set_aim(direction: Vector2) -> void:
 func try_fire() -> void:
 	if cooldown > 0.0:
 		return
-	cooldown = 1.0 / float(stats.fire_rate)
+	cooldown = 1.0 / (float(stats.fire_rate) * Tune.fire_rate_scale)
 	for i in int(stats.bullets):
 		var ang: float = rotation + randf_range(-stats.spread, stats.spread)
 		var b := Bullet.new()
 		get_tree().current_scene.add_child(b)
 		b.launch(global_position + Vector2.from_angle(ang) * 12.0, ang, stats, shooter_group, bullet_mask)
 	Game.shake(stats.shake)
+	Game.play_sfx("shoot", 0.8 if shooter_group == "guards" else 1.0)  # 守卫枪声调低,听声辨位
 	_muzzle_flash()
 	_eject_shell()
 

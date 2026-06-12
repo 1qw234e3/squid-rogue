@@ -2,13 +2,46 @@ extends Node
 ## 全局服务(autoload):输入注册、屏震转发、hitstop、中文 UI 字体。
 ## 输入用代码注册而不是写在 project.godot 里,方便统一管理死区和双输入(键鼠 + 手柄)。
 
+const SFX_PATHS := {
+	"shoot": "res://assets/sfx/shoot.wav",
+	"hit": "res://assets/sfx/hit.wav",
+	"kill": "res://assets/sfx/kill.wav",
+	"roll": "res://assets/sfx/roll.wav",
+	"alert": "res://assets/sfx/alert.wav",
+}
+
 var camera: Camera2D
 var _hitstopping := false
 var _ui_font: SystemFont
+var _sfx_players: Array = []
+var _sfx_streams := {}
+var _sfx_index := 0
 
 
 func _enter_tree() -> void:
 	_setup_inputs()
+
+
+func _ready() -> void:
+	# 一个小播放器池轮转使用,连发时音效不会互相掐断
+	for i in 8:
+		var p := AudioStreamPlayer.new()
+		p.volume_db = -8.0
+		add_child(p)
+		_sfx_players.append(p)
+	# 启动时全部预载:第一枪不卡顿,加载失败也能在启动时立刻暴露
+	for key in SFX_PATHS:
+		_sfx_streams[key] = load(SFX_PATHS[key])
+		assert(_sfx_streams[key] != null, "音效加载失败: " + SFX_PATHS[key])
+
+
+## 播放占位音效,带轻微随机变调,连续开枪不会像机器
+func play_sfx(sfx: String, pitch := 1.0) -> void:
+	var p: AudioStreamPlayer = _sfx_players[_sfx_index]
+	_sfx_index = (_sfx_index + 1) % _sfx_players.size()
+	p.stream = _sfx_streams[sfx]
+	p.pitch_scale = pitch * randf_range(0.92, 1.08)
+	p.play()
 
 
 ## Godot 默认字体不含中文,用系统字体兜底(macOS 是 PingFang SC)
@@ -21,17 +54,17 @@ func ui_font() -> SystemFont:
 
 func shake(amount: float) -> void:
 	if amount > 0.0 and is_instance_valid(camera):
-		camera.add_shake(amount)
+		camera.add_shake(amount * Tune.shake_scale)
 
 
 ## 命中停顿:全局时间放慢一瞬再恢复——打击感三件套之一(设计文档 §6:命中 0.05s hitstop)
-func hitstop(duration := 0.05) -> void:
-	if _hitstopping:
+func hitstop() -> void:
+	if _hitstopping or Tune.hitstop_duration <= 0.0:
 		return
 	_hitstopping = true
 	Engine.time_scale = 0.05
 	# ignore_time_scale = true,否则这个计时器自己也被放慢了
-	await get_tree().create_timer(duration, true, false, true).timeout
+	await get_tree().create_timer(Tune.hitstop_duration, true, false, true).timeout
 	Engine.time_scale = 1.0
 	_hitstopping = false
 

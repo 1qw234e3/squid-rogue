@@ -4,7 +4,6 @@ extends CharacterBody2D
 
 const Weapon := preload("res://scripts/combat/weapon.gd")
 
-const SPEED := 90.0
 const ROLL_SPEED := 230.0
 const ROLL_TIME := 0.4
 const ROLL_CD := 1.5
@@ -51,17 +50,19 @@ func _physics_process(delta: float) -> void:
 			rolling = false
 			body_rect.modulate.a = 1.0
 	else:
-		velocity = move * SPEED + knockback
+		velocity = move * Tune.player_speed + knockback  # 移速走调参面板,F1 实时调
 		if Input.is_action_just_pressed("roll") and roll_cd <= 0.0 and move != Vector2.ZERO:
 			rolling = true
 			roll_dir = move.normalized()
 			roll_timer = ROLL_TIME
 			roll_cd = ROLL_CD
 			body_rect.modulate.a = 0.45  # 半透明 = 无敌帧的视觉提示
+			Game.play_sfx("roll")
 	knockback = knockback.move_toward(Vector2.ZERO, 600.0 * delta)
 	move_and_slide()
 	_update_aim()
-	if not rolling and Input.is_action_pressed("shoot"):
+	# 鼠标悬在调参面板上时停火,不然拖滑条会一直放枪
+	if not rolling and Input.is_action_pressed("shoot") and not Tune.mouse_over_panel():
 		weapon.try_fire()
 	if Input.is_action_just_pressed("interact"):
 		_try_pickup()
@@ -93,9 +94,10 @@ func take_damage(dmg: int, from_dir: Vector2) -> void:
 	if rolling or hp <= 0:
 		return  # 翻滚期间免伤 = 无敌帧
 	hp -= dmg
-	knockback = from_dir * 140.0
+	knockback = from_dir * 140.0 * Tune.knockback_scale
 	EventBus.player_hp_changed.emit(hp, MAX_HP)
 	Game.shake(3.0)
+	Game.play_sfx("hit", 0.6)  # 低音调区分"我挨打"和"我打中"
 	modulate = Color(3, 3, 3)  # 受击白闪
 	var tw := create_tween()
 	tw.tween_property(self, "modulate", Color(1, 1, 1), 0.15)

@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.6")
 
 EventBus="*res://scripts/autoload/event_bus.gd"
 Game="*res://scripts/autoload/game.gd"
+Tune="*res://scripts/autoload/tune.gd"
 
 [display]
 

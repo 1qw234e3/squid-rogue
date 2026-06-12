@@ -25,7 +25,7 @@ func launch(pos: Vector2, ang: float, stats: Dictionary, group: String, mask: in
 	global_position = pos
 	rotation = ang
 	dir = Vector2.from_angle(ang)
-	speed = stats.bullet_speed
+	speed = stats.bullet_speed * Tune.bullet_speed_scale
 	damage = stats.damage
 	color = stats.color
 	shooter_group = group
@@ -41,6 +41,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _draw() -> void:
+	# 拖尾:子弹快起来也看得清弹道
+	draw_line(Vector2(-14, 0), Vector2(-3, 0), Color(color.r, color.g, color.b, 0.3), 2.0)
 	draw_rect(Rect2(-3, -1.5, 6, 3), color)
 
 
@@ -50,6 +52,7 @@ func _on_body_entered(body: Node) -> void:
 	if body.has_method("take_damage"):
 		body.take_damage(damage, dir)
 		Game.hitstop()
+		Game.play_sfx("hit")
 	_spawn_hit_fx()
 	queue_free()
 
