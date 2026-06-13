@@ -25,9 +25,10 @@ enum Light { GREEN, WARN, RED }
 
 var light := Light.GREEN
 var light_timer := 2.0
-var time_in_light := 0.0   # 进入当前灯态多久了(NPC 反应判定用)
+var time_in_light := 0.0    # 进入当前灯态多久了(NPC 反应判定用)
 var contestants: Array = []
-var kill_queue: Array = []  # {npc, t}:已被判违规、等待处决的 NPC
+var npc_viol := {}          # NPC -> 红灯期间的移动累计(与玩家同一套违规检测)
+var kill_queue: Array = []  # {npc, t, line}:已锁定、等待处决的 NPC
 var guard_posts: Array = [] # 场边守卫哨位坐标,处决枪从最近哨位打出
 var time_left := TIME_LIMIT
 var violate := 0.0
@@ -95,6 +96,7 @@ func _process(delta: float) -> void:
 				_set_light(Light.RED)
 		Light.RED:
 			_check_violation(delta)
+			_check_npc_violations(delta)
 			if light_timer <= 0.0:
 				_set_light(Light.GREEN)
 	if laser_timer >= 0.0:
@@ -166,6 +168,8 @@ func _resolve_shot() -> void:
 	if hit.is_empty():
 		_snipe_player()
 		if player.hp <= 0:
+			_blood_burst(player.global_position)
+			_blood_stain(player.global_position)
 			_eliminate("红灯期间移动")
 	else:
 		_damage_cover(hit.collider)
@@ -173,37 +177,100 @@ func _resolve_shot() -> void:
 
 # ---------- 参赛者 NPC 与处决 ----------
 
-## 红灯落下的瞬间,给每个活着的 NPC 掷反应延迟;滑出太多的进处决队列
+## 红灯落下的瞬间,只给每个 NPC 掷"反应延迟"(决定他要滑行多久才停得住);
+## 杀不杀由下面的真实违规检测说了算——谁在红灯下动,谁就被锁定
 func _roll_npc_violations() -> void:
+	npc_viol.clear()
 	for npc in contestants:
 		if npc.dead or npc.done:
 			continue
 		npc.reaction = maxf(0.0, (1.0 - npc.courage) * rng.randf_range(0.0, 0.4))
-		if npc.reaction > 0.15 and rng.randf() < 0.5:
-			kill_queue.append({"npc": npc, "t": npc.reaction + 0.35})
+
+
+## 与玩家完全同一套规则:红灯下移动累计 0.2s → 红线锁定 0.35s → 处决
+func _check_npc_violations(delta: float) -> void:
+	for npc in contestants:
+		if npc.dead or npc.done or _in_kill_queue(npc):
+			continue
+		if npc.velocity.length() > MOVE_EPS:
+			npc_viol[npc] = npc_viol.get(npc, 0.0) + delta
+		else:
+			npc_viol[npc] = maxf(npc_viol.get(npc, 0.0) - delta * 2.0, 0.0)
+		if npc_viol[npc] >= VIOLATE_TIME:
+			npc_viol[npc] = 0.0
+			var line := Line2D.new()
+			line.width = 1.0
+			line.default_color = Color(1.0, 0.25, 0.2, 0.55)
+			add_child(line)
+			kill_queue.append({"npc": npc, "t": 0.35, "line": line})
+			Game.play_sfx_at("alert", npc.global_position, 1.6)
+
+
+func _in_kill_queue(npc: Node) -> bool:
+	for e in kill_queue:
+		if e.npc == npc:
+			return true
+	return false
 
 
 func _process_kill_queue(delta: float) -> void:
 	for entry in kill_queue.duplicate():
 		entry.t -= delta
+		var npc: CharacterBody2D = entry.npc
+		if npc.dead or npc.done:
+			entry.line.queue_free()
+			kill_queue.erase(entry)
+			continue
+		var post := _nearest_post(npc.global_position)
+		entry.line.points = PackedVector2Array([post, npc.global_position])
 		if entry.t > 0.0:
 			continue
 		kill_queue.erase(entry)
-		var npc: CharacterBody2D = entry.npc
-		if npc.dead or npc.done:
-			continue
-		var post := _nearest_post(npc.global_position)
+		entry.line.queue_free()
 		# 躲到掩体后的 NPC 也能逃过一劫——规则对所有人一致,玩家看得懂
 		var params := PhysicsRayQueryParameters2D.create(post, npc.global_position, 1)
 		if not get_world_2d().direct_space_state.intersect_ray(params).is_empty():
 			continue
-		_tracer(post, npc.global_position)
-		Game.play_sfx_at("shoot_heavy", npc.global_position, 0.9)
-		npc.die()
-		_broadcast("第 %02d 号参赛者,淘汰。" % npc.number)
-		# 死者遗物:35% 掉一小袋配给券,绿灯里去舔包是风险换钱
-		if rng.randf() < 0.35:
-			_drop_loot("money", rng.randi_range(10, 30), npc.global_position + Vector2(8, 0))
+		_execute_npc(npc, post)
+
+
+## 处决的完整表现:弹道、血溅、血渍、尸体、播报、掉落
+func _execute_npc(npc: CharacterBody2D, post: Vector2) -> void:
+	_tracer(post, npc.global_position)
+	Game.play_sfx_at("shoot_heavy", npc.global_position, 0.9)
+	Game.shake(1.5)
+	_blood_burst(npc.global_position)
+	_blood_stain(npc.global_position)
+	npc.die()
+	_broadcast("第 %02d 号参赛者,淘汰。" % npc.number)
+	# 死者遗物:35% 掉一小袋配给券,绿灯里去舔包是风险换钱
+	if rng.randf() < 0.35:
+		_drop_loot("money", rng.randi_range(10, 30), npc.global_position + Vector2(8, 0))
+
+
+## 血溅:八粒暗红色碎块向四周迸开后淡去
+func _blood_burst(pos: Vector2) -> void:
+	for i in 8:
+		var p := ColorRect.new()
+		p.size = Vector2(3, 3)
+		p.color = Color("b3202a")
+		add_child(p)
+		p.global_position = pos
+		var fling := Vector2.from_angle(rng.randf_range(0.0, TAU)) * rng.randf_range(8.0, 26.0)
+		var tw := p.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(p, "position", p.position + fling, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(p, "modulate:a", 0.0, rng.randf_range(0.4, 0.9))
+		get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+
+
+## 血渍:留在地上一整局,场地会越来越像刑场
+func _blood_stain(pos: Vector2) -> void:
+	var s := ColorRect.new()
+	s.size = Vector2(16, 10)
+	s.color = Color(0.45, 0.1, 0.1, 0.4)
+	add_child(s)
+	s.global_position = pos - Vector2(8, 5)
 
 
 func _nearest_post(pos: Vector2) -> Vector2:
