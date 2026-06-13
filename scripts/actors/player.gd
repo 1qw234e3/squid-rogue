@@ -20,6 +20,8 @@ var combat_enabled := true:
 var use_inertia := false
 ## 外部授予的无敌(如抢椅子关:坐上椅子=安全区)
 var invulnerable := false
+## 正在引导拾取(撤离模式按住搜刮):期间禁止开枪;翻滚会被拾取方取消
+var channeling := false
 var rolling := false
 var roll_dir := Vector2.ZERO
 var roll_timer := 0.0
@@ -77,7 +79,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_update_aim()
 	# 鼠标悬在调参面板上时停火,不然拖滑条会一直放枪
-	if combat_enabled and not rolling and Input.is_action_pressed("shoot") and not Tune.mouse_over_panel():
+	if combat_enabled and not rolling and not channeling and Input.is_action_pressed("shoot") and not Tune.mouse_over_panel():
 		weapon.try_fire()
 	if combat_enabled and Input.is_action_just_pressed("interact"):
 		_try_pickup()

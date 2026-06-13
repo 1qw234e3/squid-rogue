@@ -9,6 +9,16 @@ var hitstop_duration := 0.05
 var fire_rate_scale := 1.0
 var bullet_speed_scale := 1.0
 var knockback_scale := 1.0
+# —— 撤离模式(图纸起手值,依§12 调)——
+var threat_shot := 1.0      # 枪声威胁(0.5s 节流窗内只记一次)
+var threat_kill := 2.0
+var drip_interval := 20.0   # 90s 后的被动滴漏间隔
+var t1_squad := 2.0         # 各档增援人数
+var t2_squad := 3.0
+var t3_squad := 2.0
+var extract_time := 5.0     # 撤离引导秒数
+var pickup_blue := 0.5
+var pickup_gold := 1.0
 
 var panel: PanelContainer
 var _dragging := false  # 滑条抓着鼠标时为真,即使鼠标甩出了面板边缘
@@ -32,6 +42,15 @@ func _ready() -> void:
 	_add_slider(vbox, "射速 x", 0.5, 2.5, 0.05, fire_rate_scale, func(v: float) -> void: fire_rate_scale = v)
 	_add_slider(vbox, "子弹速度 x", 0.5, 2.0, 0.05, bullet_speed_scale, func(v: float) -> void: bullet_speed_scale = v)
 	_add_slider(vbox, "击退力度 x", 0.0, 3.0, 0.05, knockback_scale, func(v: float) -> void: knockback_scale = v)
+	_add_slider(vbox, "威胁/枪声", 0.0, 5.0, 0.5, threat_shot, func(v: float) -> void: threat_shot = v)
+	_add_slider(vbox, "威胁/击杀", 0.0, 6.0, 0.5, threat_kill, func(v: float) -> void: threat_kill = v)
+	_add_slider(vbox, "滴漏间隔 s", 5.0, 60.0, 1.0, drip_interval, func(v: float) -> void: drip_interval = v)
+	_add_slider(vbox, "T1 增援", 0.0, 6.0, 1.0, t1_squad, func(v: float) -> void: t1_squad = v)
+	_add_slider(vbox, "T2 增援", 0.0, 6.0, 1.0, t2_squad, func(v: float) -> void: t2_squad = v)
+	_add_slider(vbox, "T3 续援", 0.0, 6.0, 1.0, t3_squad, func(v: float) -> void: t3_squad = v)
+	_add_slider(vbox, "撤离引导 s", 3.0, 8.0, 0.5, extract_time, func(v: float) -> void: extract_time = v)
+	_add_slider(vbox, "蓝货拾取 s", 0.0, 3.0, 0.1, pickup_blue, func(v: float) -> void: pickup_blue = v)
+	_add_slider(vbox, "金货拾取 s", 0.0, 3.0, 0.1, pickup_gold, func(v: float) -> void: pickup_gold = v)
 	var btn := Button.new()
 	btn.text = "打印当前值到控制台"
 	_style(btn, 9)

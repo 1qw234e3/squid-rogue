@@ -244,6 +244,13 @@ func _los_clear(point: Vector2) -> bool:
 # ---------- 状态切换 ----------
 
 ## 进入追捕(也是"呼叫包抄"让别的守卫调用的公共入口)
+## 猎人模式(撤离模式的增援):不巡逻,直奔指定位置,到点搜索后原地转巡逻
+func hunt(pos: Vector2) -> void:
+	patrol_a = pos + Vector2(24, 0)
+	patrol_b = pos - Vector2(24, 0)
+	_begin_search(pos)
+
+
 func force_chase() -> void:
 	if hp <= 0 or state == State.CHASE:
 		return
@@ -253,6 +260,7 @@ func force_chase() -> void:
 	if is_instance_valid(target):
 		last_seen = target.global_position
 	cone.color = CONE_CHASE
+	EventBus.guard_alerted.emit()
 	Game.play_sfx_at("alert", global_position)
 
 

@@ -16,6 +16,10 @@ func _ready() -> void:
 	sub.size = Vector2(640, 20)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.modulate.a = 0.7
+	var extra := Game.make_label(layer, Vector2(0, 260), 9, "T — 搜刮行动(撤离模式灰盒)")
+	extra.size = Vector2(640, 20)
+	extra.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	extra.modulate.a = 0.55
 	var prompt := Game.make_label(layer, Vector2(0, 230), 12, "—— 按 Enter 报名进岛 ——")
 	prompt.size = Vector2(640, 20)
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -28,3 +32,5 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_accept"):
 		Run.start_run()
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_T:
+		get_tree().change_scene_to_file("res://scenes/games/Extraction.tscn")

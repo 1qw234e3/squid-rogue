@@ -10,3 +10,5 @@ signal exit_reached
 ## 噪音事件:潜行系统的统一货币(设计议题 1.3)。枪声、未来的偷窃失手、
 ## 通风管动静都从这里广播;守卫各自判断声源是否在自己可听范围内
 signal noise_emitted(pos: Vector2, radius: float, source_group: String)
+## 守卫进入追捕的瞬间(被发现次数统计/威胁系统用)
+signal guard_alerted
