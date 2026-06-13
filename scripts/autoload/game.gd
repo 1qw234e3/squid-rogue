@@ -13,6 +13,10 @@ const SFX_PATHS := {
 	"alert": "res://assets/sfx/alert.wav",
 }
 
+const MUSIC_PATHS := {
+	"waltz": "res://assets/music/waltz_chairs.wav",
+}
+
 var camera: Camera2D
 var _hitstopping := false
 var _ui_font: SystemFont
@@ -20,6 +24,8 @@ var _light_tex: GradientTexture2D
 var _sfx_players: Array = []
 var _sfx_streams := {}
 var _sfx_index := 0
+var _music_player: AudioStreamPlayer
+var _music_streams := {}
 
 
 func _enter_tree() -> void:
@@ -37,6 +43,26 @@ func _ready() -> void:
 	for key in SFX_PATHS:
 		_sfx_streams[key] = load(SFX_PATHS[key])
 		assert(_sfx_streams[key] != null, "音效加载失败: " + SFX_PATHS[key])
+	_music_player = AudioStreamPlayer.new()
+	_music_player.volume_db = -10.0
+	add_child(_music_player)
+	for key in MUSIC_PATHS:
+		var stream: AudioStreamWAV = load(MUSIC_PATHS[key])
+		assert(stream != null, "音乐加载失败: " + MUSIC_PATHS[key])
+		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD  # 无缝循环
+		stream.loop_end = stream.data.size() / 2        # 16bit 单声道:字节数/2 = 采样数
+		_music_streams[key] = stream
+
+
+## 循环播放背景音乐(抢椅子的圆舞曲等)
+func play_music(music: String) -> void:
+	_music_player.stream = _music_streams[music]
+	_music_player.play()
+
+
+## 骤停——在抢椅子里,这本身就是规则信号
+func stop_music() -> void:
+	_music_player.stop()
 
 
 ## 播放占位音效(无方位,用于玩家自身/UI),带轻微随机变调

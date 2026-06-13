@@ -30,8 +30,6 @@ var lockers := {}        # entity -> {"chair": idx, "t": float}
 var still_t := 0.0
 var idle_laser := -1.0
 var laser: Line2D
-var beep_t := 0.0
-var beep_high := false
 var volley_t := 0.0
 var clear_elapsed := 0.0
 var bonus_spawned := false
@@ -93,19 +91,14 @@ func _start_music() -> void:
 	phase = Phase.MUSIC
 	phase_t = rng.randf_range(8.0, 20.0)
 	still_t = 0.0
-	hud_phase.text = "♪ 音乐播放中 —— 保持移动"
+	hud_phase.text = "♪ 圆舞曲播放中 —— 保持移动"
 	hud_phase.modulate = Color("9fd1c8")
+	Game.play_music("waltz")  # 优雅的钢琴圆舞曲:音乐越好听,骤停越惊心
 	_broadcast("音乐响起。站着不动的人,守卫会帮他动起来。")
 
 
 func _music_tick(delta: float) -> void:
 	phase_t -= delta
-	# 节拍器(占位音乐):两个音高交替
-	beep_t -= delta
-	if beep_t <= 0.0:
-		beep_t = 0.55
-		beep_high = not beep_high
-		Game.play_sfx("hit", 2.2 if beep_high else 1.8)
 	_check_player_still(delta)
 	if phase_t <= 0.0:
 		phase = Phase.SCRAMBLE
@@ -114,6 +107,7 @@ func _music_tick(delta: float) -> void:
 		idle_laser = -1.0
 		hud_phase.text = "音乐停!抢椅子!"
 		hud_phase.modulate = Color("ffd86b")
+		Game.stop_music()  # 骤停即指令
 		Game.play_sfx("alert", 0.6)
 		Game.shake(3.0)
 		_broadcast("音乐停止。椅子数:%d。" % chairs.size())
@@ -310,6 +304,7 @@ func _win() -> void:
 		return
 	finished = true
 	phase = Phase.DONE
+	Game.stop_music()
 	hud_msg.text = "你抢到了活下去的位置"
 	hud_msg.visible = true
 	await get_tree().create_timer(1.8).timeout
@@ -320,6 +315,7 @@ func _on_player_died() -> void:
 	if finished:
 		return
 	finished = true
+	Game.stop_music()
 	hud_msg.text = "淘汰:没有你的椅子"
 	hud_msg.visible = true
 	await get_tree().create_timer(1.8).timeout
