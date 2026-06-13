@@ -19,6 +19,7 @@ const GUARD_CAP := 9         # 场上守卫常驻数(死了会增援补满)
 const GUARD_CAP_FINALE := 13
 const RESPAWN_MIN := 6.0     # 增援间隔
 const RESPAWN_MAX := 10.0
+const TIME_LIMIT := 180.0    # 限时找到出口,超时即淘汰
 
 const COLOR_FLOOR := Color("39424f")
 const COLOR_WALL := Color("171c24")
@@ -35,6 +36,8 @@ var guard_cap := GUARD_CAP
 var kills := 0
 var respawn_times: Array = []  # 待增援的时间点(elapsed 时间轴)
 var elapsed := 0.0
+var time_left := TIME_LIMIT
+var warned := false
 var finished := false
 var room_tints := {}  # 房间下标 -> 地标染色
 
@@ -42,6 +45,7 @@ var hud_hp: Label
 var hud_weapon: Label
 var hud_guards: Label
 var hud_msg: Label
+var hud_time: Label
 
 
 func _ready() -> void:
@@ -72,6 +76,16 @@ func _process(delta: float) -> void:
 	if finished:
 		return
 	elapsed += delta
+	time_left -= delta
+	hud_time.text = "%d" % maxi(ceili(time_left), 0)
+	hud_time.modulate = Color("ff7070") if time_left < 30.0 else Color.WHITE
+	if time_left < 30.0 and not warned:
+		warned = true
+		Game.play_sfx("alert", 0.8)
+		Game.float_text(player.global_position + Vector2(0, -30), "剩余 30 秒,找到绿灯!", Color("ff8080"))
+	if time_left <= 0.0:
+		_on_timeout()
+		return
 	# 守卫增援:到点且场上没满编,就在远离玩家的房间刷一个
 	for t in respawn_times.duplicate():
 		if elapsed >= t:
@@ -289,9 +303,16 @@ func _spawn_doors() -> void:
 		var center := (_cell_center(first) + _cell_center(last)) / 2.0
 		var span: int = gap.cells.size() * CELL
 		var door := Door.new()
-		door.setup(Vector2(span, 6) if gap.horizontal else Vector2(6, span))
+		door.setup(Vector2(span, 6) if gap.horizontal else Vector2(6, span), self, gap.cells)
 		add_child(door)
 		door.global_position = center
+		set_door_cells_solid(gap.cells, true)  # 门初始关闭,寻路即刻认账
+
+
+## 门开关时同步 A*:关着的门对守卫的寻路来说就是墙
+func set_door_cells_solid(cells: Array, solid: bool) -> void:
+	for c in cells:
+		astar.set_point_solid(c, solid)
 
 
 ## 找出房间边界外一圈上的地面开口(走廊入口),按连续段分组
@@ -366,6 +387,9 @@ func _setup_hud() -> void:
 	hud_hp = _make_label(layer, Vector2(8, 6), 10)
 	hud_weapon = _make_label(layer, Vector2(8, 20), 10)
 	hud_guards = _make_label(layer, Vector2(8, 34), 10)
+	hud_time = _make_label(layer, Vector2(0, 8), 14)
+	hud_time.size = Vector2(640, 20)
+	hud_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var hint := _make_label(layer, Vector2(8, 344), 8)
 	hint.text = "WASD 移动 · 鼠标瞄准 · 左键射击 · 空格翻滚 · E 拾取 · R 重开    种子 %d" % run_seed
 	hint.modulate.a = 0.7
@@ -403,6 +427,16 @@ func _on_guard_died(_guard: Node) -> void:
 	if not finished:
 		respawn_times.append(elapsed + rng.randf_range(RESPAWN_MIN, RESPAWN_MAX))
 	_refresh_guard_label()
+
+
+func _on_timeout() -> void:
+	finished = true
+	Game.play_sfx("shoot_heavy", 0.7)
+	hud_msg.text = "超时 —— 广播宣布你出局" if Run.active else "超时 —— 按 R 重开"
+	hud_msg.visible = true
+	if Run.active:
+		await get_tree().create_timer(1.8).timeout
+		Run.minigame_finished(false)
 
 
 func _on_player_died() -> void:

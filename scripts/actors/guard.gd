@@ -13,10 +13,8 @@ enum State { PATROL, CHASE, SEARCH }
 const PATROL_SPEED := 45.0
 const CHASE_SPEED := 80.0
 const SEARCH_SPEED := 60.0
-const VISION_RANGE := 96.0           # 6 格 × 16px(设计文档 §2.4)
 const VISION_HALF_ANGLE := PI / 3.0  # 120° 视锥的一半
-const TRACK_RANGE := 192.0           # 追捕中保持目击的最大距离(比初见远,追着不容易立刻丢)
-const FIRE_RANGE := 120.0
+const FIRE_RANGE := 110.0
 const CALL_RANGE := 150.0            # 呼叫包抄的广播半径
 const TELEGRAPH_TIME := 0.3          # 开枪前摇
 const LOSE_SIGHT_TIME := 5.0         # 跟丢多久放弃追捕转搜索
@@ -29,6 +27,10 @@ const CONE_CHASE := Color(1.0, 0.25, 0.2, 0.14)    # 红:警觉
 
 var state := State.PATROL
 var hp := 3
+## 视野距离:黑暗关里被压到很短——守卫在黑暗里同样看不远,
+## 他们随身的小灯就是他们的视野范围,玩家远远看到光团就知道躲哪
+var vision_range := 60.0
+var track_range := 120.0  # 追捕中保持目击的最大距离
 var arena: Node2D
 var target: CharacterBody2D
 var patrol_a := Vector2.ZERO
@@ -88,6 +90,14 @@ func _ready() -> void:
 	weapon = Weapon.new()
 	weapon.setup(Weapon.GUARD_RIFLE, "guards", 1 | 2)
 	add_child(weapon)
+	# 随身小灯:照亮的范围 ≈ 他的视野,黑暗里这就是"危险的形状"
+	var lamp := PointLight2D.new()
+	lamp.texture = Game.radial_light_texture()
+	lamp.texture_scale = vision_range / 110.0
+	lamp.energy = 0.9
+	lamp.color = Color(1.0, 0.85, 0.65)
+	lamp.shadow_enabled = true
+	add_child(lamp)
 	EventBus.noise_emitted.connect(_on_noise)
 
 
@@ -95,7 +105,7 @@ func _cone_points() -> PackedVector2Array:
 	var pts := PackedVector2Array([Vector2.ZERO])
 	for i in 9:
 		var ang := lerpf(-VISION_HALF_ANGLE, VISION_HALF_ANGLE, i / 8.0)
-		pts.append(Vector2.from_angle(ang) * VISION_RANGE)
+		pts.append(Vector2.from_angle(ang) * vision_range)
 	return pts
 
 
@@ -150,7 +160,7 @@ func _chase(delta: float) -> void:
 			weapon.try_fire()
 		return
 	var dist := global_position.distance_to(target.global_position)
-	var sees := dist < TRACK_RANGE and _los_clear(target.global_position)
+	var sees := dist < track_range and _los_clear(target.global_position)
 	if sees:
 		last_seen = target.global_position  # 持续刷新最后目击点
 		lose_timer = 0.0
@@ -218,7 +228,7 @@ func _can_see_target() -> bool:
 	if not is_instance_valid(target) or not target.visible:
 		return false
 	var to := target.global_position - global_position
-	if to.length() > VISION_RANGE:
+	if to.length() > vision_range:
 		return false
 	if absf(facing.angle_to(to)) > VISION_HALF_ANGLE:
 		return false
