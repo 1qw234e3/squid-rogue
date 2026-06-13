@@ -112,6 +112,37 @@ func radial_light_texture() -> GradientTexture2D:
 	return _light_tex
 
 
+## 血溅:暗红碎块向四周迸开后淡去(全游戏共享的受击/处决表现)
+func blood_burst(pos: Vector2, count := 8) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	for i in count:
+		var p := ColorRect.new()
+		p.size = Vector2(3, 3)
+		p.color = Color("b3202a")
+		scene.add_child(p)
+		p.global_position = pos
+		var fling := Vector2.from_angle(randf_range(0.0, TAU)) * randf_range(8.0, 26.0)
+		var tw := p.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(p, "position", p.position + fling, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(p, "modulate:a", 0.0, randf_range(0.4, 0.9))
+		tw.chain().tween_callback(p.queue_free)
+
+
+## 血渍:留在地上不消失,场地会越来越像刑场
+func blood_stain(pos: Vector2) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var s := ColorRect.new()
+	s.size = Vector2(16, 10)
+	s.color = Color(0.45, 0.1, 0.1, 0.4)
+	scene.add_child(s)
+	s.global_position = pos - Vector2(8, 5)
+
+
 ## 世界坐标处冒一行小字,上浮淡出(拾取/奖励提示通用)
 func float_text(pos: Vector2, text: String, color := Color.WHITE) -> void:
 	var l := Label.new()

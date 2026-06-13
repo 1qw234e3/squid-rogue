@@ -112,6 +112,16 @@ func heal(amount: int) -> void:
 	EventBus.player_hp_changed.emit(hp, MAX_HP)
 
 
+## 被捅:刀无视"安全区无敌"(椅子防弹不防刀),但翻滚无敌帧仍可闪避
+func stabbed(dmg: int, from_dir: Vector2) -> void:
+	if rolling or hp <= 0:
+		return
+	var was_invulnerable := invulnerable
+	invulnerable = false
+	take_damage(dmg, from_dir)
+	invulnerable = was_invulnerable
+
+
 func take_damage(dmg: int, from_dir: Vector2) -> void:
 	if rolling or invulnerable or hp <= 0:
 		return  # 翻滚无敌帧 / 安全区免伤

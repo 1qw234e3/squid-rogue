@@ -168,8 +168,8 @@ func _resolve_shot() -> void:
 	if hit.is_empty():
 		_snipe_player()
 		if player.hp <= 0:
-			_blood_burst(player.global_position)
-			_blood_stain(player.global_position)
+			Game.blood_burst(player.global_position)
+			Game.blood_stain(player.global_position)
 			_eliminate("红灯期间移动")
 	else:
 		_damage_cover(hit.collider)
@@ -239,38 +239,13 @@ func _execute_npc(npc: CharacterBody2D, post: Vector2) -> void:
 	_tracer(post, npc.global_position)
 	Game.play_sfx_at("shoot_heavy", npc.global_position, 0.9)
 	Game.shake(1.5)
-	_blood_burst(npc.global_position)
-	_blood_stain(npc.global_position)
+	Game.blood_burst(npc.global_position)
+	Game.blood_stain(npc.global_position)
 	npc.die()
 	_broadcast("第 %02d 号参赛者,淘汰。" % npc.number)
 	# 死者遗物:35% 掉一小袋配给券,绿灯里去舔包是风险换钱
 	if rng.randf() < 0.35:
 		_drop_loot("money", rng.randi_range(10, 30), npc.global_position + Vector2(8, 0))
-
-
-## 血溅:八粒暗红色碎块向四周迸开后淡去
-func _blood_burst(pos: Vector2) -> void:
-	for i in 8:
-		var p := ColorRect.new()
-		p.size = Vector2(3, 3)
-		p.color = Color("b3202a")
-		add_child(p)
-		p.global_position = pos
-		var fling := Vector2.from_angle(rng.randf_range(0.0, TAU)) * rng.randf_range(8.0, 26.0)
-		var tw := p.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(p, "position", p.position + fling, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.tween_property(p, "modulate:a", 0.0, rng.randf_range(0.4, 0.9))
-		tw.chain().tween_callback(p.queue_free)  # 跟着补间走,场景退出也不悬空
-
-
-## 血渍:留在地上一整局,场地会越来越像刑场
-func _blood_stain(pos: Vector2) -> void:
-	var s := ColorRect.new()
-	s.size = Vector2(16, 10)
-	s.color = Color(0.45, 0.1, 0.1, 0.4)
-	add_child(s)
-	s.global_position = pos - Vector2(8, 5)
 
 
 func _nearest_post(pos: Vector2) -> Vector2:

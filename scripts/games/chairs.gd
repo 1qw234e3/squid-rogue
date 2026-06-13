@@ -8,6 +8,7 @@ const PlayerScript := preload("res://scripts/actors/player.gd")
 const ShakeCamera := preload("res://scripts/m0/shake_camera.gd")
 const ChairsNpc := preload("res://scripts/actors/chairs_npc.gd")
 const Bullet := preload("res://scripts/combat/bullet.gd")
+const WeaponScript := preload("res://scripts/combat/weapon.gd")
 
 const CENTER := Vector2(320, 180)
 const ARENA_R := 150.0
@@ -411,7 +412,9 @@ func _spawn_player() -> void:
 	player = PlayerScript.new()
 	add_child(player)
 	player.global_position = CENTER + Vector2(0, ARENA_R - 30.0)
-	player.combat_enabled = false  # 这关的武器是腿和手肘
+	# 人手一把小刀:左键捅人,E 仍是推搡。椅子防弹不防刀
+	player.weapon.setup(WeaponScript.KNIFE, "player", 1 | 4)
+	player.weapon.melee_target_group = "chairs_npcs"
 	var cam: Camera2D = ShakeCamera.new()
 	cam.position = CENTER
 	add_child(cam)
@@ -433,8 +436,13 @@ func _setup_hud() -> void:
 	hud_phase = Game.make_label(layer, Vector2(0, 8), 12)
 	hud_phase.size = Vector2(640, 20)
 	hud_phase.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var hint := Game.make_label(layer, Vector2(8, 344), 8, "音乐期保持移动 · 椅子上站 0.5s 锁定 · E 推人抢座")
+	var hint := Game.make_label(layer, Vector2(8, 344), 8, "音乐期保持移动 · 椅子上站 0.5s 锁定 · E 推人 · 左键捅人(椅子防弹不防刀)")
 	hint.modulate.a = 0.7
+	var hud_hp := Game.make_label(layer, Vector2(8, 6), 10)
+	EventBus.player_hp_changed.connect(func(hp: int, max_hp: int) -> void:
+		hud_hp.text = "HP " + "#".repeat(maxi(hp, 0)) + "-".repeat(max_hp - maxi(hp, 0))
+	)
+	EventBus.player_hp_changed.emit(player.hp, player.MAX_HP)
 	hud_msg = Game.make_label(layer, Vector2(0, 150), 16)
 	hud_msg.size = Vector2(640, 40)
 	hud_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

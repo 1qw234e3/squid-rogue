@@ -47,6 +47,8 @@ const AXE := {
 var stats := PISTOL
 var shooter_group := ""
 var bullet_mask := 0
+## 近战目标组覆写:默认玩家打守卫;抢椅子关设为 "chairs_npcs"
+var melee_target_group := ""
 var cooldown := 0.0
 var barrel: ColorRect
 var flash_rect: ColorRect
@@ -124,7 +126,9 @@ func try_fire() -> void:
 
 ## 近战:扇形范围内、未被墙挡住的敌人全部吃伤害。无枪口火光无抛壳无噪音
 func _melee_attack() -> void:
-	var enemy_group := "guards" if shooter_group == "player" else "player"
+	var enemy_group := melee_target_group
+	if enemy_group == "":
+		enemy_group = "guards" if shooter_group == "player" else "player"
 	var dir := Vector2.from_angle(rotation)
 	var reach: float = float(stats.range) + 10.0  # 容差:目标有体积
 	for body in get_tree().get_nodes_in_group(enemy_group):
@@ -137,7 +141,12 @@ func _melee_attack() -> void:
 		var params := PhysicsRayQueryParameters2D.create(global_position, body.global_position, 1)
 		if not get_world_2d().direct_space_state.intersect_ray(params).is_empty():
 			continue
-		body.take_damage(stats.damage, to.normalized())
+		# 刀不被椅子挡:目标若实现了 stabbed(安全区免疫绕过),优先走它
+		if body.has_method("stabbed"):
+			body.stabbed(stats.damage, to.normalized())
+		else:
+			body.take_damage(stats.damage, to.normalized())
+		Game.blood_burst(body.global_position, 4)
 		Game.hitstop()
 		Game.play_sfx("melee_hit")
 	Game.shake(stats.shake)
