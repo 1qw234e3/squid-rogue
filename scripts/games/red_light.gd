@@ -261,7 +261,7 @@ func _blood_burst(pos: Vector2) -> void:
 		tw.set_parallel(true)
 		tw.tween_property(p, "position", p.position + fling, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.tween_property(p, "modulate:a", 0.0, rng.randf_range(0.4, 0.9))
-		get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+		tw.chain().tween_callback(p.queue_free)  # 跟着补间走,场景退出也不悬空
 
 
 ## 血渍:留在地上一整局,场地会越来越像刑场

@@ -99,7 +99,7 @@ func float_text(pos: Vector2, text: String, color := Color.WHITE) -> void:
 	tw.set_parallel(true)
 	tw.tween_property(l, "position:y", l.position.y - 14.0, 0.8)
 	tw.tween_property(l, "modulate:a", 0.0, 0.6).set_delay(0.3)
-	get_tree().create_timer(1.0).timeout.connect(l.queue_free)
+	tw.chain().tween_callback(l.queue_free)
 
 
 ## UI 快捷:建一个用中文字体的 Label(默认字体不含中文)
